@@ -17,13 +17,9 @@ const errorMiddleware = (err: Error, req: Request, res: Response, next: NextFunc
 
   // 3. Handle Unknown/Unexpected System Crashes (e.g., Database connection drops, syntax bugs)
   // 🛡️ Critical Security Step: Hide native system crash details from clients in production
-  const errorMessage = env.NODE_ENV === 'production' 
-    ? 'Internal server error' 
-    : err.message;
+  const errorMessage = 'Internal server error';
 
-  return res
-    .status(500)
-    .json(new ErrorResponse(500, errorMessage, []));
+  return res.status(500).json(new ErrorResponse(500, errorMessage, []));
 };
 
 export default errorMiddleware;
