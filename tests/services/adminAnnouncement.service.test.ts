@@ -30,7 +30,7 @@ function resetMocks() {
   (dispatchNotification as any).mockResolvedValue(undefined);
 }
 
-describe.skip('composePlatformAnnouncement', () => {
+describe('composePlatformAnnouncement', () => {
   beforeEach(resetMocks);
 
   it('sends to every user in the target roles, filtered via role: { in: [...] }', async () => {
@@ -113,7 +113,7 @@ describe.skip('composePlatformAnnouncement', () => {
   });
 });
 
-describe.skip('adjustNotificationRules (list announcements)', () => {
+describe('adjustNotificationRules (list announcements)', () => {
   beforeEach(resetMocks);
 
   it('lists announcements paginated', async () => {

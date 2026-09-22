@@ -1,7 +1,300 @@
+// prisma/schema.prisma
+
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
+}
+
+// ─────────────────────────────────────────────────────────────
+// Enums
+// ─────────────────────────────────────────────────────────────
+
+enum UserRole {
+  STUDENT
+  PARENT
+  TUTOR
+  ADMIN
+}
+
+enum NotifChannel {
+  PUSH
+  SMS
+  EMAIL
+}
+
+enum NotificationStatus {
+  QUEUED
+  SENT
+  FAILED
+}
+
+// Canonical NotificationType values — Doc 04 §4.2.10 (L2 fix).
+// No endpoint, job, or service may introduce a new value here without
+// first adding it to that canonical table.
+enum NotificationType {
+  REGISTRATION_COMPLETE
+  TUTOR_VERIFICATION_APPROVED
+  TUTOR_VERIFICATION_REJECTED
+  MATCH_FOUND
+  MATCH_REJECTED
+  BOOKING_CONFIRMED
+  PAYMENT_RECEIVED
+  CLASS_REMINDER
+  CLASS_CANCELLED
+  CLASS_RESCHEDULED
+  MAKEUP_SCHEDULED
+  ASSESSMENT_AVAILABLE
+  WEEKLY_SUMMARY
+  RECORDING_AVAILABLE
+  MATERIAL_UPLOADED
+  BADGE_EARNED
+  LEADERBOARD_CHANGE
+  EARNING_CREDITED
+  PAYOUT_PROCESSED
+  COMPLAINT_STATUS_UPDATE
+  COMPLAINT_RESOLVED
+  PLATFORM_ANNOUNCEMENT
+  NEW_MESSAGE
+  ADMIN_REVIEW_REQUIRED
+}
+
+enum PolicyType {
+  PRIVACY
+  TERMS
+  SAFETY
+  REFUND
+  RULES
+}
+
+// Doc 04 §4.2.1 — determines Grades 1–5 vs. 6–12 account-model routing
+// (FR-AC-002/005). Default is PENDING_ACTIVATION; registerUser sets
+// ACTIVE explicitly for the Grade 6–12 self-registration path.
+enum StudentAccountStatus {
+  PENDING_ACTIVATION
+  ACTIVE
+  GUARDIAN_REQUIRED_HOLD
+}
+
+// Doc 04 §4.2.1/§4.2.3 — determines matching Path A/B vs. C.
+enum TutoringFormat {
+  ONE_TO_ONE
+  ONE_TO_THREE
+  ONE_TO_FIVE
+}
+
+// Doc 04 §4.2.1 — completes once the first linked student activates.
+enum ParentOnboardingStatus {
+  PENDING
+  COMPLETE
+}
+
+// Doc 04 §4.2.1 — Admin-driven; PENDING until verified.
+enum TutorVerificationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+// ─────────────────────────────────────────────────────────────
+// Models
+// ─────────────────────────────────────────────────────────────
+
+model User {
+  id                           String        @id @default(uuid())
+  role                         UserRole
+  email                        String?       @unique
+  phone                        String?       @unique
+  passwordHash                 String
+  emailVerifiedAt              DateTime?
+  phoneVerifiedAt              DateTime?
+  preferredNotificationChannel NotifChannel?
+  termsAcceptedAt              DateTime
+  failedLoginCount             Int           @default(0) 
+  createdAt                    DateTime      @default(now())
+  updatedAt                    DateTime      @updatedAt
+
+  // 1:1 profile rows — at most one populated per User, determined by
+  // `role` at registration and never changed afterward (Doc 04 §4.2.1).
+  // Admin has no profile row.
+  studentProfile StudentProfile?
+  parentProfile  ParentProfile?
+  tutorProfile   TutorProfile?   @relation("TutorProfileUser")
+
+  // TutorProfile.verifiedBy is a second FK to User, so that relation is
+  // explicitly named; its inverse lives here.
+  verifiedTutors TutorProfile[]  @relation("TutorVerifiedBy")
+
+  refreshTokens     RefreshToken[]
+  notifications     Notification[]
+  publishedPolicies PolicyDocument[]
+  auditLogs         AuditLog[]
+  announcements     Announcement[]
+}
+
+model StudentProfile {
+  id                         String               @id @default(uuid())
+  userId                     String               @unique
+  grade                      Int
+  school                     String?
+  profilePictureUrl          String?
+  // Array of Subject IDs (FR-SP-008) — a Json array, per Doc 04 §4.2.1.
+  subjectsOfInterest         Json                 @default("[]")
+  academicLevel              String?
+  learningGoals              String?
+  // Hard filter, all formats (Section 5.2 callout). No schema default —
+  // registerUser supplies a value; the column is required per Doc 04.
+  preferredLanguage          String
+  learningSchedulePreference Json?
+  teachingStylePreference    String?
+  budgetPreference           Decimal?
+  formatPreference           TutoringFormat?
+  accountStatus              StudentAccountStatus @default(PENDING_ACTIVATION)
+  createdAt                  DateTime             @default(now())
+  updatedAt                  DateTime             @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Relations to MatchRequest, CohortMembership, XPLedgerEntry,
+  // StudentBadge, Streak, ChallengeProgress, Payment, PaymentPause,
+  // TutorExclusion, ParentStudentRelationship are added when those
+  // models land in later phases (Doc 05a §10).
+}
+
+model ParentProfile {
+  id                String                 @id @default(uuid())
+  userId            String                 @unique
+  profilePictureUrl String?
+  onboardingStatus  ParentOnboardingStatus @default(PENDING)
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // studentRelationships (ParentStudentRelationship[]) added in Phase 2.
+}
+
+model TutorProfile {
+  id                    String                  @id @default(uuid())
+  userId                String                  @unique
+  profilePictureUrl     String?
+  bio                   String?
+  experienceDescription String
+  educationInstitution  String?
+  degree                String?
+  verificationStatus    TutorVerificationStatus @default(PENDING)
+  verifiedAt            DateTime?
+  verifiedById          String?
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+
+  user       User  @relation("TutorProfileUser", fields: [userId], references: [id], onDelete: Cascade)
+  // onDelete is not Cascade here — deleting an Admin who once verified a
+  // tutor must not delete the tutor's profile; it just nulls the pointer.
+  verifiedBy User? @relation("TutorVerifiedBy", fields: [verifiedById], references: [id], onDelete: SetNull)
+
+  // subjectRankings, availabilitySlots, cohorts, tutorBadges,
+  // tutorEarnings, payouts added in later phases.
+}
+
+model RefreshToken {
+  id                String    @id @default(uuid())
+  userId            String
+  tokenHash         String    @unique
+  familyId          String    @default(uuid())
+  expiresAt         DateTime
+  revokedAt         DateTime?
+  replacedByTokenId String?
+  createdByIp       String?
+  userAgent         String?
+  createdAt         DateTime  @default(now())
+
+  // The only cascade exception in the schema (Doc 04 §4.4) — refresh
+  // tokens are pure session artifacts with no standalone audit value
+  // once their User is gone.
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  replacedBy RefreshToken?  @relation("RefreshTokenReplacement", fields: [replacedByTokenId], references: [id], onDelete: SetNull)
+  replaces   RefreshToken[] @relation("RefreshTokenReplacement")
+
+  @@index([userId, revokedAt])
+  @@index([familyId])
+}
+
+model Notification {
+  id        String             @id @default(uuid())
+  userId    String
+  type      NotificationType
+  payload   Json
+  channel   NotifChannel
+  status    NotificationStatus @default(QUEUED)
+  sentAt    DateTime?
+  readAt    DateTime?
+  createdAt DateTime           @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
+}
+
+model PolicyDocument {
+  id            String     @id @default(uuid())
+  type          PolicyType
+  content       String
+  version       Int
+  publishedById String
+  publishedAt   DateTime   @default(now())
+  createdAt     DateTime   @default(now())
+
+  publishedBy User @relation(fields: [publishedById], references: [id])
+
+  @@unique([type, version])
+}
+
+// Append-only record of money/PII/admin-trust-relevant actions, for
+// compliance and dispute review (Doc 04 §4.2.10, working-context Rule 6).
+// Written exclusively through `auditLog.service.record({ actor, action,
+// target, timestamp })` — see `00-agent-rules.md` Rule 10 for the pinned
+// call shape. Never updated or deleted; rows are insert-only.
+model AuditLog {
+  id        String   @id @default(uuid())
+  actor     String
+  action    String
+  target    String
+  timestamp DateTime @default(now())
+
+  // No onDelete specified → Prisma's default `Restrict` for required
+  // relations. Audit rows must survive their actor's deletion, so a
+  // cascade here would be exactly wrong; a User cannot be hard-deleted
+  // while audit rows reference them.
+  actorUser User @relation(fields: [actor], references: [id])
+
+  @@index([actor, timestamp])
+  @@index([action, timestamp])
+  @@index([target])
+}
+
+// Platform-wide announcement metadata — one row per announcement composed
+// by an Admin (FR-AD-019, UC-89). Per-user delivery is fanned out through
+// the Notification table (type PLATFORM_ANNOUNCEMENT); this model holds
+// only the announcement record itself, which the admin listing reads back.
+//
+// SPEC GAP — flagged, not silently worked around: Doc 04 §4.2.9 defines
+// no Announcement entity, but `tests/services/adminAnnouncement.service.test.ts`
+// mocks `prisma.announcement.create/findMany/count` and asserts a
+// persisted announcement whose `createdById` is echoed in the DTO. Per
+// working-context Rule 1 (the test is the spec), the model is added here.
+// Doc 04 should be updated to reflect it.
+model Announcement {
+  id            String     @id @default(uuid())
+  title         String
+  body          String
+  audienceRoles UserRole[]
+  createdById   String
+  createdAt     DateTime   @default(now())
+
+  createdBy User @relation(fields: [createdById], references: [id])
+
+  @@index([createdAt])
 }

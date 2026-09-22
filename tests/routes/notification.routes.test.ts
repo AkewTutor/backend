@@ -24,7 +24,7 @@ import app from '../../src/app.js';
 
 const authHeader = { Authorization: 'Bearer valid.token.here' };
 
-describe.skip('notification.routes.ts', () => {
+describe('notification.routes.ts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (notificationService.listForUser as any).mockResolvedValue({

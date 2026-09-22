@@ -19,7 +19,7 @@ vi.mock('../../src/config/db.js', () => ({
 import { prisma } from '../../src/config/db.js';
 import { getCurrentPolicy, publishNewVersion } from '../../src/services/policy.service.js';
 
-describe.skip('getCurrentPolicy', () => {
+describe('getCurrentPolicy', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('returns the highest version for the type', async () => {
@@ -54,7 +54,7 @@ describe.skip('getCurrentPolicy', () => {
   });
 });
 
-describe.skip('publishNewVersion', () => {
+describe('publishNewVersion', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('creates version 1 as the first version for a type', async () => {

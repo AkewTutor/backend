@@ -25,7 +25,7 @@ vi.mock('../../src/utils/jwt.js', () => ({
 import * as adminAnnouncementService from '../../src/services/adminAnnouncement.service.js';
 import app from '../../src/app.js';
 
-describe.skip('adminAnnouncement.routes.ts', () => {
+describe('adminAnnouncement.routes.ts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (adminAnnouncementService.composePlatformAnnouncement as any).mockResolvedValue({

@@ -13,7 +13,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { send } from '../../../src/utils/providers/email.client.js';
 
-describe.skip('email.client.ts — send', () => {
+describe('email.client.ts — send', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.clearAllMocks();

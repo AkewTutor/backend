@@ -62,7 +62,7 @@ async function realLoginFor(user: { email: string | null; phone: string | null }
   return { ...result, row };
 }
 
-describe.skip('auth.service.ts — Integration (persistence)', () => {
+describe('auth.service.ts — Integration (persistence)', () => {
   beforeAll(async () => {
     await assertTestDbReachable();
   });

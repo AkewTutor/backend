@@ -15,7 +15,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { send } from '../../../src/utils/providers/sms.client.js';
 
-describe.skip('sms.client.ts — send', () => {
+describe('sms.client.ts — send', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.clearAllMocks();

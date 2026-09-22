@@ -24,6 +24,15 @@ vi.mock('../../src/config/db.js', () => ({
       create: vi.fn(),
       update: vi.fn(),
     },
+    studentProfile: {
+      create: vi.fn(),
+    },
+    parentProfile: {
+      create: vi.fn(),
+    },
+    tutorProfile: {
+      create: vi.fn(),
+    },
     refreshToken: {
       create: vi.fn(),
       findUnique: vi.fn(),
@@ -87,7 +96,7 @@ function resetAllMocks() {
   (recordAuditLog as any).mockResolvedValue(undefined);
 }
 
-describe.skip('registerUser', () => {
+describe('registerUser', () => {
   beforeEach(() => resetAllMocks());
 
   it('successful student registration (Grade 6-12) resolves the documented shape', async () => {
@@ -269,7 +278,7 @@ describe.skip('registerUser', () => {
   });
 });
 
-describe.skip('login', () => {
+describe('login', () => {
   beforeEach(() => resetAllMocks());
 
   const activeUser = {
@@ -383,7 +392,7 @@ describe.skip('login', () => {
   });
 });
 
-describe.skip('logout', () => {
+describe('logout', () => {
   beforeEach(() => resetAllMocks());
 
   it('resolves as a no-op (void), a deliberate stateless-JWT no-op', async () => {
@@ -393,7 +402,7 @@ describe.skip('logout', () => {
   });
 });
 
-describe.skip('requestPasswordReset', () => {
+describe('requestPasswordReset', () => {
   beforeEach(() => resetAllMocks());
 
   it('matching identifier resolves successfully and dispatches a reset code', async () => {
@@ -417,7 +426,7 @@ describe.skip('requestPasswordReset', () => {
   });
 });
 
-describe.skip('resetPassword', () => {
+describe('resetPassword', () => {
   beforeEach(() => resetAllMocks());
 
   it('valid, unexpired, unused code resolves and updates passwordHash', async () => {
@@ -477,7 +486,7 @@ describe.skip('resetPassword', () => {
   });
 });
 
-describe.skip('verifyContact / resendVerification', () => {
+describe('verifyContact / resendVerification', () => {
   beforeEach(() => resetAllMocks());
 
   it('valid code verifies email and leaves phoneVerifiedAt untouched', async () => {
@@ -518,7 +527,7 @@ describe.skip('verifyContact / resendVerification', () => {
   });
 });
 
-describe.skip('login / refreshAccessToken / logout / logoutAll (refresh-token flow)', () => {
+describe('login / refreshAccessToken / logout / logoutAll (refresh-token flow)', () => {
   beforeEach(() => resetAllMocks());
 
   it('login issues both tokens and creates a RefreshToken row with a hashed value and fresh familyId', async () => {

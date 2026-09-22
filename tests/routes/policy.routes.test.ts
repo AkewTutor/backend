@@ -25,7 +25,7 @@ vi.mock('../../src/utils/jwt.js', () => ({
 import * as policyService from '../../src/services/policy.service.js';
 import app from '../../src/app.js';
 
-describe.skip('policy.routes.ts', () => {
+describe('policy.routes.ts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (policyService.getCurrentPolicy as any).mockResolvedValue({

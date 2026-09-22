@@ -41,7 +41,7 @@ const validRegisterStudentBody = {
   termsAccepted: true,
 };
 
-describe.skip('auth.routes.ts — public/authenticated boundary', () => {
+describe('auth.routes.ts — public/authenticated boundary', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (authService.registerUser as any).mockResolvedValue({ userId: 'u1', role: 'STUDENT' });

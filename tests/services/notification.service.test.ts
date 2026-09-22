@@ -42,7 +42,7 @@ function resetMocks() {
   (prisma.notification.update as any).mockResolvedValue({ id: 'notif-1', status: 'SENT' });
 }
 
-describe.skip('dispatchNotification', () => {
+describe('dispatchNotification', () => {
   beforeEach(resetMocks);
 
   it('delivers via SMS when preferredNotificationChannel is SMS', async () => {
@@ -134,7 +134,7 @@ describe.skip('dispatchNotification', () => {
   });
 });
 
-describe.skip('listForUser', () => {
+describe('listForUser', () => {
   beforeEach(resetMocks);
 
   it('returns paginated notifications scoped to the caller only', async () => {
@@ -167,7 +167,7 @@ describe.skip('listForUser', () => {
   });
 });
 
-describe.skip('markRead', () => {
+describe('markRead', () => {
   beforeEach(resetMocks);
 
   it('owner marks their own notification read', async () => {
@@ -200,7 +200,7 @@ describe.skip('markRead', () => {
   });
 });
 
-describe.skip('retryFailed', () => {
+describe('retryFailed', () => {
   beforeEach(resetMocks);
 
   it('retries all FAILED rows', async () => {
