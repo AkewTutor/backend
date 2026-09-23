@@ -15,6 +15,7 @@ vi.mock('../../src/config/db.js', () => ({
       findMany: vi.fn(),
       findUnique: vi.fn(),
       update: vi.fn(),
+      count: vi.fn(),
     },
   },
 }));
@@ -39,11 +40,12 @@ import ApiError from '../../src/utils/ApiError.js';
 
 function resetAllMocks() {
   vi.clearAllMocks();
+  (prisma.tutorProfile.count as any).mockResolvedValue(0);
   (dispatchNotification as any).mockResolvedValue(undefined);
   (recordAuditLog as any).mockResolvedValue(undefined);
 }
 
-describe.skip('listPendingTutors', () => {
+describe('listPendingTutors', () => {
   beforeEach(() => resetAllMocks());
 
   it('lists only PENDING tutors, paginated', async () => {
@@ -58,7 +60,7 @@ describe.skip('listPendingTutors', () => {
   });
 });
 
-describe.skip('approveTutor / rejectTutor', () => {
+describe('approveTutor / rejectTutor', () => {
   beforeEach(() => resetAllMocks());
 
   it('approves a pending tutor — sets VERIFIED, verifiedAt, verifiedById; notifies the tutor', async () => {

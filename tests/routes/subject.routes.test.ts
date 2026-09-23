@@ -26,7 +26,7 @@ vi.mock('../../src/utils/jwt.js', () => ({
 import * as subjectService from '../../src/services/subject.service.js';
 import app from '../../src/app.js';
 
-describe.skip('subject.routes.ts', () => {
+describe('subject.routes.ts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (subjectService.listSubjects as any).mockResolvedValue([]);

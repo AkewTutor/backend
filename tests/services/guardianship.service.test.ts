@@ -76,7 +76,7 @@ function resetAllMocks() {
   (recordAuditLog as any).mockResolvedValue(undefined);
 }
 
-describe.skip('addStudentAndInvite', () => {
+describe('addStudentAndInvite', () => {
   beforeEach(() => resetAllMocks());
 
   it('Grade 1–5 succeeds — creates a placeholder StudentProfile + INVITED MANDATORY_GUARDIAN relationship', async () => {
@@ -140,7 +140,7 @@ describe.skip('addStudentAndInvite', () => {
   });
 });
 
-describe.skip('resendOrRegenerateInvite', () => {
+describe('resendOrRegenerateInvite', () => {
   beforeEach(() => resetAllMocks());
 
   it('owner resends before activation — resets to a fresh 14-day window, not an extension', async () => {
@@ -200,20 +200,31 @@ describe.skip('resendOrRegenerateInvite', () => {
   });
 });
 
-describe.skip('activateInvite', () => {
+describe('activateInvite', () => {
   beforeEach(() => resetAllMocks());
 
   it('a valid, unexpired token activates the account and resolves the documented shape', async () => {
     (prisma.parentStudentRelationship.findFirst as any).mockResolvedValue({
       id: 'rel-1',
+      studentId: 'sp-1',
       studentProfileId: 'sp-1',
       status: 'INVITED',
       inviteExpiresAt: new Date(Date.now() + 1000 * 60 * 60),
+      student: { userId: 'user-1' },
     });
-    (prisma.$transaction as any).mockResolvedValue([
-      { id: 'user-1' },
-      { id: 'rel-1', status: 'ACTIVE' },
-    ]);
+
+    // Execute the interactive transaction callback
+    (prisma.$transaction as any).mockImplementation(async (cb: any) => {
+      if (typeof cb === 'function') {
+        const fakeTx = {
+          parentStudentRelationship: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+          user: { update: vi.fn().mockResolvedValue({}) },
+          studentProfile: { update: vi.fn().mockResolvedValue({}) },
+        };
+        return cb(fakeTx);
+      }
+      return [{ id: 'user-1' }, { id: 'rel-1', status: 'ACTIVE' }];
+    });
 
     const result = await activateInvite('good-token', 'password123');
 
@@ -256,11 +267,22 @@ describe.skip('activateInvite', () => {
   it('the password is hashed before persistence — never the literal string', async () => {
     (prisma.parentStudentRelationship.findFirst as any).mockResolvedValue({
       id: 'rel-1',
+      studentId: 'sp-1',
+      studentProfileId: 'sp-1',
       status: 'INVITED',
       inviteExpiresAt: new Date(Date.now() + 1000 * 60 * 60),
+      student: { userId: 'user-1' },
     });
-    (prisma.$transaction as any).mockImplementation(async (ops: any) => {
-      // Simulate the transaction callback/array to inspect the User create payload.
+
+    (prisma.$transaction as any).mockImplementation(async (cb: any) => {
+      if (typeof cb === 'function') {
+        const fakeTx = {
+          parentStudentRelationship: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+          user: { update: vi.fn().mockResolvedValue({}) },
+          studentProfile: { update: vi.fn().mockResolvedValue({}) },
+        };
+        return cb(fakeTx);
+      }
       return [{ id: 'user-1' }, { id: 'rel-1', status: 'ACTIVE' }];
     });
 
@@ -306,7 +328,7 @@ describe.skip('activateInvite', () => {
   });
 });
 
-describe.skip('inviteOptionalGuardian', () => {
+describe('inviteOptionalGuardian', () => {
   beforeEach(() => resetAllMocks());
 
   it('a Grade 6–12 student invites a guardian — creates an OPTIONAL_GUARDIAN, INVITED relationship', async () => {
@@ -332,7 +354,7 @@ describe.skip('inviteOptionalGuardian', () => {
   });
 });
 
-describe.skip('revokeOrModifyRelationship / handleSoleGuardianRemoval', () => {
+describe('revokeOrModifyRelationship / handleSoleGuardianRemoval', () => {
   beforeEach(() => resetAllMocks());
 
   it('a guardian revokes their own relationship — not sole; studentAccountStatus key is omitted entirely', async () => {

@@ -32,7 +32,7 @@ function mockRes() {
   return res as Response & { status: ReturnType<typeof vi.fn>; json: ReturnType<typeof vi.fn> };
 }
 
-describe.skip('tutorProfile.controller.ts', () => {
+describe('tutorProfile.controller.ts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });

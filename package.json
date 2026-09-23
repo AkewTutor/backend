@@ -24,7 +24,8 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:migrate:test": "dotenv -e .env.test -- prisma migrate deploy",
-    "prepare": "husky"
+    "prepare": "husky",
+    "prisma:seed": "tsx prisma/seed.ts"
   },
   "repository": {
     "type": "git",
@@ -83,5 +84,8 @@
   },
   "vitest": {
     "globals": true
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
   }
 }

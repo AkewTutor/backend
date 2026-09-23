@@ -27,7 +27,7 @@ vi.mock('../../src/utils/jwt.js', () => ({
 import * as adminTutorVerificationService from '../../src/services/adminTutorVerification.service.js';
 import app from '../../src/app.js';
 
-describe.skip('adminTutorVerification.routes.ts', () => {
+describe('adminTutorVerification.routes.ts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (adminTutorVerificationService.listPendingTutors as any).mockResolvedValue({

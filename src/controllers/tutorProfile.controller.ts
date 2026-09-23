@@ -1,17 +1,39 @@
-// STUB: auto-generated placeholder to satisfy TypeScript module resolution.
-// TODO: implement real logic.
-import type { Request, Response, NextFunction } from 'express';
-import asyncHandler from '../utils/asyncHandler.js';
-import ApiError from '../utils/ApiError.js';
+import { Response, NextFunction } from 'express';
+import { AuthRequest } from '../types/index.js';
+import * as tutorProfileService from '../services/tutorProfile.service.js';
 
-export const resubmitVerification = asyncHandler(
-  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    throw new ApiError(501, 'resubmitVerification not implemented');
-  },
-);
+export async function getProfile(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const result = await tutorProfileService.getProfile(req.user!.id);
+    res.status(200).json({ statusCode: 200, success: true, message: 'OK', data: result });
+  } catch (error) {
+    next(error);
+  }
+}
 
-export const updateProfile = asyncHandler(
-  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    throw new ApiError(501, 'updateProfile not implemented');
-  },
-);
+export async function updateProfile(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const result = await tutorProfileService.updateProfile(req.user!.id, req.body);
+    res.status(200).json({ statusCode: 200, success: true, message: 'OK', data: result });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function resubmitVerification(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const result = await tutorProfileService.resubmitVerification(req.user!.id);
+    res.status(200).json({ statusCode: 200, success: true, message: 'OK', data: result });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function rankSubjects(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const result = await tutorProfileService.rankSubjects(req.user!.id, req.body.subjects);
+    res.status(200).json({ statusCode: 200, success: true, message: 'OK', data: result });
+  } catch (error) {
+    next(error);
+  }
+}

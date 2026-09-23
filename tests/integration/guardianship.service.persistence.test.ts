@@ -31,6 +31,7 @@ import {
   buildParentProfile,
   buildParentStudentRelationship,
   buildStudentProfile,
+  buildTutorProfile,
 } from '../factories/accounts-guardianship.factory.js';
 import { buildCohort, buildCohortMembership } from '../factories/matching-cohorts.factory.js';
 import { buildStreak, buildXPLedgerEntry } from '../factories/gamification-engagement.factory.js';
@@ -52,8 +53,15 @@ async function seedInvitedFamily(overrides: { inviteExpiresAt?: Date } = {}) {
   const parentProfile = await (testPrisma as any).parentProfile.create({
     data: buildParentProfile({ userId: parentUser.id }),
   });
+  const studentUser = await (testPrisma as any).user.create({
+    data: buildUser({ role: 'STUDENT' }),
+  });
   const studentProfile = await (testPrisma as any).studentProfile.create({
-    data: buildStudentProfile({ grade: 3, accountStatus: 'PENDING_ACTIVATION' }),
+    data: buildStudentProfile({
+      userId: studentUser.id,
+      grade: 3,
+      accountStatus: 'PENDING_ACTIVATION',
+    }),
   });
   const relationship = await (testPrisma as any).parentStudentRelationship.create({
     data: buildParentStudentRelationship({
@@ -72,8 +80,11 @@ async function seedSoleGuardianFamily() {
   const parentProfile = await (testPrisma as any).parentProfile.create({
     data: buildParentProfile({ userId: parentUser.id }),
   });
+  const studentUser = await (testPrisma as any).user.create({
+    data: buildUser({ role: 'STUDENT' }),
+  });
   const studentProfile = await (testPrisma as any).studentProfile.create({
-    data: buildStudentProfile({ grade: 3, accountStatus: 'ACTIVE' }),
+    data: buildStudentProfile({ userId: studentUser.id, grade: 3, accountStatus: 'ACTIVE' }),
   });
   const relationship = await (testPrisma as any).parentStudentRelationship.create({
     data: buildParentStudentRelationship({
@@ -86,7 +97,7 @@ async function seedSoleGuardianFamily() {
   return { parentUser, parentProfile, studentProfile, relationship };
 }
 
-describe.skip('guardianship.service.ts — Integration (persistence)', () => {
+describe('guardianship.service.ts — Integration (persistence)', () => {
   beforeAll(async () => {
     await assertTestDbReachable();
   });
@@ -166,9 +177,9 @@ describe.skip('guardianship.service.ts — Integration (persistence)', () => {
 
   describe('revokeOrModifyRelationship / handleSoleGuardianRemoval — real state transition and real no-cascade proof', () => {
     it('sole-guardian removal persists GUARDIAN_REQUIRED_HOLD for real', async () => {
-      const { parentProfile, studentProfile, relationship } = await seedSoleGuardianFamily();
+      const { parentUser, studentProfile, relationship } = await seedSoleGuardianFamily();
 
-      await revokeOrModifyRelationship(parentProfile.id, 'PARENT', relationship.id, {
+      await revokeOrModifyRelationship(parentUser.id, 'PARENT', relationship.id, {
         revoke: true,
       } as any);
 
@@ -186,15 +197,18 @@ describe.skip('guardianship.service.ts — Integration (persistence)', () => {
     });
 
     it('no real row is deleted or orphaned across every FK-linked entity', async () => {
-      const { parentProfile, studentProfile, relationship } = await seedSoleGuardianFamily();
+      const { parentUser, studentProfile, relationship } = await seedSoleGuardianFamily();
       const tutorUser = await (testPrisma as any).user.create({
         data: buildUser({ role: 'TUTOR' }),
+      });
+      const tutorProfile = await (testPrisma as any).tutorProfile.create({
+        data: buildTutorProfile({ userId: tutorUser.id }),
       });
       const subject = await (testPrisma as any).subject.create({
         data: { name: `Subject ${randomUUID()}` },
       });
       const cohort = await (testPrisma as any).cohort.create({
-        data: buildCohort({ tutorId: tutorUser.id, subjectId: subject.id, status: 'ACTIVE' }),
+        data: buildCohort({ tutorId: tutorProfile.id, subjectId: subject.id, status: 'ACTIVE' }),
       });
       const membership = await (testPrisma as any).cohortMembership.create({
         data: buildCohortMembership({
@@ -210,7 +224,7 @@ describe.skip('guardianship.service.ts — Integration (persistence)', () => {
         data: buildStreak({ studentId: studentProfile.id }),
       });
 
-      await revokeOrModifyRelationship(parentProfile.id, 'PARENT', relationship.id, {
+      await revokeOrModifyRelationship(parentUser.id, 'PARENT', relationship.id, {
         revoke: true,
       } as any);
 
@@ -233,24 +247,24 @@ describe.skip('guardianship.service.ts — Integration (persistence)', () => {
     });
 
     it('a non-existent relationship id is rejected cleanly, not as an unhandled Prisma error', async () => {
-      const { parentProfile } = await seedSoleGuardianFamily();
+      const { parentUser } = await seedSoleGuardianFamily();
 
       await expect(
-        revokeOrModifyRelationship(parentProfile.id, 'PARENT', randomUUID(), {
+        revokeOrModifyRelationship(parentUser.id, 'PARENT', randomUUID(), {
           revoke: true,
         } as any),
       ).rejects.toMatchObject({ statusCode: expect.any(Number) });
     });
 
     it("the sole-guardian removal's audit log entry is durably persisted", async () => {
-      const { parentProfile, relationship } = await seedSoleGuardianFamily();
+      const { parentUser, relationship } = await seedSoleGuardianFamily();
 
-      await revokeOrModifyRelationship(parentProfile.id, 'PARENT', relationship.id, {
+      await revokeOrModifyRelationship(parentUser.id, 'PARENT', relationship.id, {
         revoke: true,
       } as any);
 
       const auditRows = await (testPrisma as any).auditLog.findMany({
-        where: { actor: parentProfile.id, action: 'GUARDIAN_REMOVED', target: relationship.id },
+        where: { actor: parentUser.id, action: 'GUARDIAN_REMOVED', target: relationship.id },
       });
       expect(auditRows.length).toBeGreaterThanOrEqual(1);
       expect(auditRows[0].timestamp).toBeTruthy();
@@ -259,8 +273,8 @@ describe.skip('guardianship.service.ts — Integration (persistence)', () => {
 
   describe('assertAccountStatusAllowsAccess — real gate, read against a real row', () => {
     it('blocks against a real, persisted GUARDIAN_REQUIRED_HOLD row', async () => {
-      const { parentProfile, studentProfile, relationship } = await seedSoleGuardianFamily();
-      await revokeOrModifyRelationship(parentProfile.id, 'PARENT', relationship.id, {
+      const { parentUser, studentProfile, relationship } = await seedSoleGuardianFamily();
+      await revokeOrModifyRelationship(parentUser.id, 'PARENT', relationship.id, {
         revoke: true,
       } as any);
 
@@ -270,8 +284,15 @@ describe.skip('guardianship.service.ts — Integration (persistence)', () => {
     });
 
     it('blocks against a real, persisted PENDING_ACTIVATION row', async () => {
+      const studentUser = await (testPrisma as any).user.create({
+        data: buildUser({ role: 'STUDENT' }),
+      });
       const studentProfile = await (testPrisma as any).studentProfile.create({
-        data: buildStudentProfile({ grade: 3, accountStatus: 'PENDING_ACTIVATION' }),
+        data: buildStudentProfile({
+          userId: studentUser.id,
+          grade: 3,
+          accountStatus: 'PENDING_ACTIVATION',
+        }),
       });
 
       await expect(assertAccountStatusAllowsAccess(studentProfile.id)).rejects.toMatchObject({
@@ -280,8 +301,8 @@ describe.skip('guardianship.service.ts — Integration (persistence)', () => {
     });
 
     it('resolves silently once the hold is lifted — a real round-trip proof', async () => {
-      const { parentProfile, studentProfile, relationship } = await seedSoleGuardianFamily();
-      await revokeOrModifyRelationship(parentProfile.id, 'PARENT', relationship.id, {
+      const { parentUser, studentProfile, relationship } = await seedSoleGuardianFamily();
+      await revokeOrModifyRelationship(parentUser.id, 'PARENT', relationship.id, {
         revoke: true,
       } as any);
 

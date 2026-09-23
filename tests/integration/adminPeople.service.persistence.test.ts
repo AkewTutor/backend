@@ -40,20 +40,20 @@ async function seedTutorWithCohorts(activeCount: number, endedCount: number) {
   const activeCohortIds: string[] = [];
   for (let i = 0; i < activeCount; i += 1) {
     const cohort = await (testPrisma as any).cohort.create({
-      data: buildCohort({ tutorId: tutorUser.id, subjectId: subject.id, status: 'ACTIVE' }),
+      data: buildCohort({ tutorId: tutorProfile.id, subjectId: subject.id, status: 'ACTIVE' }),
     });
     activeCohortIds.push(cohort.id);
   }
   for (let i = 0; i < endedCount; i += 1) {
     await (testPrisma as any).cohort.create({
-      data: buildCohort({ tutorId: tutorUser.id, subjectId: subject.id, status: 'ENDED' }),
+      data: buildCohort({ tutorId: tutorProfile.id, subjectId: subject.id, status: 'ENDED' }),
     });
   }
 
   return { tutorUser, tutorProfile, activeCohortIds };
 }
 
-describe.skip('adminPeople.service.ts — Integration (persistence)', () => {
+describe('adminPeople.service.ts — Integration (persistence)', () => {
   beforeAll(async () => {
     await assertTestDbReachable();
   });
@@ -73,8 +73,8 @@ describe.skip('adminPeople.service.ts — Integration (persistence)', () => {
 
       const result = await suspendAccount(tutorUser.id, admin.id, 'Policy violation', 'SUSPENDED');
 
-      expect(result.affectedCohortIds).toHaveLength(2);
-      expect(result.affectedCohortIds.sort()).toEqual(activeCohortIds.sort());
+      expect(result.affectedCohortIds!).toHaveLength(2);
+      expect(result.affectedCohortIds!.sort()).toEqual(activeCohortIds.sort());
     });
 
     it('suspension is real and durable — a fresh query confirms the persisted restriction', async () => {

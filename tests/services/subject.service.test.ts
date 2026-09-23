@@ -28,7 +28,7 @@ function resetAllMocks() {
   vi.clearAllMocks();
 }
 
-describe.skip('listSubjects', () => {
+describe('listSubjects', () => {
   beforeEach(() => resetAllMocks());
 
   it('returns only active subjects by default', async () => {
@@ -52,7 +52,7 @@ describe.skip('listSubjects', () => {
   });
 });
 
-describe.skip('createSubject / deactivateSubject', () => {
+describe('createSubject / deactivateSubject', () => {
   beforeEach(() => resetAllMocks());
 
   it('creates a new subject for a new name', async () => {

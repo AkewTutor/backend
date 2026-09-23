@@ -32,7 +32,7 @@ vi.mock('../../src/utils/jwt.js', () => ({
 import * as studentProfileService from '../../src/services/studentProfile.service.js';
 import app from '../../src/app.js';
 
-describe.skip('studentProfile.routes.ts', () => {
+describe('studentProfile.routes.ts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (studentProfileService.getProfile as any).mockResolvedValue({ id: 'sp-1' });

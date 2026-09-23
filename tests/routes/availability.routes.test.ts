@@ -25,7 +25,7 @@ vi.mock('../../src/utils/jwt.js', () => ({
 import * as availabilityService from '../../src/services/availability.service.js';
 import app from '../../src/app.js';
 
-describe.skip('availability.routes.ts', () => {
+describe('availability.routes.ts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (availabilityService.listSlots as any).mockResolvedValue([]);

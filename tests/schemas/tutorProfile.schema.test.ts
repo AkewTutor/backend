@@ -17,7 +17,7 @@ import {
 const A = '11111111-1111-4111-8111-111111111111';
 const B = '22222222-2222-4222-8222-222222222222';
 
-describe.skip('rankSubjectsSchema', () => {
+describe('rankSubjectsSchema', () => {
   it('accepts exactly 2 uniquely-ranked subjects', () => {
     const result = rankSubjectsSchema.safeParse({
       body: {
@@ -89,7 +89,7 @@ describe.skip('rankSubjectsSchema', () => {
   });
 });
 
-describe.skip('updateTutorProfileSchema', () => {
+describe('updateTutorProfileSchema', () => {
   it('does not accept a verificationStatus field — mass-assignment guard', () => {
     const result = updateTutorProfileSchema.safeParse({
       body: { bio: 'Experienced tutor.', verificationStatus: 'VERIFIED' },

@@ -14,6 +14,17 @@
  * Includes the `listUsers` regex-DoS/operator-injection cases inline per
  * the Phase 7 review's confirmed pattern, rather than a separate
  * `injection.test.ts` file.
+ *
+ * MOCK SURFACE NOTE — the `cohort` delegate was added and the
+ * `cohortMembership` delegate kept, because the correct implementation of
+ * `suspendAccount`'s cascading-effect computation queries `Cohort` directly
+ * (`Cohort.tutorId` is where the tutor↔cohort link lives; `CohortMembership`
+ * links students to a cohort). The persistence suite
+ * (`tests/integration/adminPeople.service.persistence.test.ts`) seeds
+ * `Cohort` rows with zero memberships and expects their ids back — a
+ * membership-based query returns empty there. `cohortMembership` is kept in
+ * the mock for parity with the real Prisma client's surface, even though no
+ * current test exercises it.
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -22,6 +33,9 @@ vi.mock('../../src/config/db.js', () => ({
   prisma: {
     user: {
       findMany: vi.fn(),
+      findUnique: vi.fn(),
+      update: vi.fn(),
+      count: vi.fn(),
     },
     parentStudentRelationship: {
       findUnique: vi.fn(),
@@ -29,6 +43,9 @@ vi.mock('../../src/config/db.js', () => ({
     },
     tutorProfile: {
       findUnique: vi.fn(),
+    },
+    cohort: {
+      findMany: vi.fn(),
     },
     cohortMembership: {
       findMany: vi.fn(),
@@ -55,10 +72,14 @@ import {
 
 function resetAllMocks() {
   vi.clearAllMocks();
+  (prisma.user.findUnique as any).mockResolvedValue({ id: 'user-1' });
+  (prisma.user.update as any).mockResolvedValue({ id: 'user-1' });
+  (prisma.user.count as any).mockResolvedValue(0);
+  (handleSoleGuardianRemoval as any).mockResolvedValue(undefined);
   (recordAuditLog as any).mockResolvedValue(undefined);
 }
 
-describe.skip('listUsers', () => {
+describe('listUsers', () => {
   beforeEach(() => resetAllMocks());
 
   it('filters by role', async () => {
@@ -141,7 +162,7 @@ describe.skip('listUsers', () => {
   });
 });
 
-describe.skip('manageRelationshipRecords', () => {
+describe('manageRelationshipRecords', () => {
   beforeEach(() => resetAllMocks());
 
   it('Admin edits a relationship directly', async () => {
@@ -171,7 +192,7 @@ describe.skip('manageRelationshipRecords', () => {
   });
 });
 
-describe.skip('suspendAccount / restrictAccount', () => {
+describe('suspendAccount / restrictAccount', () => {
   beforeEach(() => resetAllMocks());
 
   it('suspending a Student/Parent (no cohort side effects) omits affectedCohortIds entirely', async () => {
@@ -184,10 +205,7 @@ describe.skip('suspendAccount / restrictAccount', () => {
 
   it('suspending a Tutor with active cohorts includes affectedCohortIds', async () => {
     (prisma.tutorProfile.findUnique as any).mockResolvedValue({ id: 'tp-1' });
-    (prisma.cohortMembership.findMany as any).mockResolvedValue([
-      { cohortId: 'c1' },
-      { cohortId: 'c2' },
-    ]);
+    (prisma.cohort.findMany as any).mockResolvedValue([{ id: 'c1' }, { id: 'c2' }]);
 
     const result = await suspendAccount('tutor-1', 'admin-1', 'Policy violation', 'SUSPENDED');
 
@@ -196,7 +214,7 @@ describe.skip('suspendAccount / restrictAccount', () => {
 
   it('suspending a Tutor with zero active cohorts omits affectedCohortIds', async () => {
     (prisma.tutorProfile.findUnique as any).mockResolvedValue({ id: 'tp-1' });
-    (prisma.cohortMembership.findMany as any).mockResolvedValue([]);
+    (prisma.cohort.findMany as any).mockResolvedValue([]);
 
     const result = await suspendAccount('tutor-1', 'admin-1', 'Policy violation', 'SUSPENDED');
 
@@ -205,7 +223,7 @@ describe.skip('suspendAccount / restrictAccount', () => {
 
   it('never directly calls cohort.service/adminMatching.service — it only flags affectedCohortIds', async () => {
     (prisma.tutorProfile.findUnique as any).mockResolvedValue({ id: 'tp-1' });
-    (prisma.cohortMembership.findMany as any).mockResolvedValue([{ cohortId: 'c1' }]);
+    (prisma.cohort.findMany as any).mockResolvedValue([{ id: 'c1' }]);
 
     await suspendAccount('tutor-1', 'admin-1', 'Policy violation', 'SUSPENDED');
     // No cohort/matching-service mock is registered above — if the implementation
@@ -215,7 +233,7 @@ describe.skip('suspendAccount / restrictAccount', () => {
 
   it('the suspension reason never leaks to affected students via anything this function itself dispatches', async () => {
     (prisma.tutorProfile.findUnique as any).mockResolvedValue({ id: 'tp-1' });
-    (prisma.cohortMembership.findMany as any).mockResolvedValue([{ cohortId: 'c1' }]);
+    (prisma.cohort.findMany as any).mockResolvedValue([{ id: 'c1' }]);
 
     await suspendAccount(
       'tutor-1',

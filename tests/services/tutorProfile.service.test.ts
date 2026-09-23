@@ -39,7 +39,7 @@ function resetAllMocks() {
   vi.clearAllMocks();
 }
 
-describe.skip('getProfile / updateProfile', () => {
+describe('getProfile / updateProfile', () => {
   beforeEach(() => resetAllMocks());
 
   it("returns the tutor's own profile", async () => {
@@ -58,7 +58,7 @@ describe.skip('getProfile / updateProfile', () => {
   });
 });
 
-describe.skip('resubmitVerification — Issue 2 fix', () => {
+describe('resubmitVerification — Issue 2 fix', () => {
   beforeEach(() => resetAllMocks());
 
   it('a REJECTED tutor returns to PENDING, clearing verifiedAt/verifiedById', async () => {
@@ -125,7 +125,7 @@ describe.skip('resubmitVerification — Issue 2 fix', () => {
   });
 });
 
-describe.skip('rankSubjects', () => {
+describe('rankSubjects', () => {
   beforeEach(() => resetAllMocks());
 
   it('ranks exactly 2 subjects successfully — transaction called with delete-then-create in one array', async () => {

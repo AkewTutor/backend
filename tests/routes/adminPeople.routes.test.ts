@@ -27,7 +27,7 @@ vi.mock('../../src/utils/jwt.js', () => ({
 import * as adminPeopleService from '../../src/services/adminPeople.service.js';
 import app from '../../src/app.js';
 
-describe.skip('adminPeople.routes.ts', () => {
+describe('adminPeople.routes.ts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (adminPeopleService.listUsers as any).mockResolvedValue({

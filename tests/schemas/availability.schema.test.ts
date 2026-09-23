@@ -11,7 +11,7 @@ import { createSlotSchema, deleteSlotSchema } from '../../src/schemas/availabili
 const t1 = '2026-06-01T10:00:00Z';
 const t2 = '2026-06-01T11:00:00Z';
 
-describe.skip('createSlotSchema', () => {
+describe('createSlotSchema', () => {
   it('requires dayOfWeek when isRecurring is true', () => {
     const result = createSlotSchema.safeParse({
       body: { isRecurring: true, startTime: t1, endTime: t2 },
@@ -49,7 +49,7 @@ describe.skip('createSlotSchema', () => {
   });
 });
 
-describe.skip('deleteSlotSchema', () => {
+describe('deleteSlotSchema', () => {
   it('requires a uuid slotId param', () => {
     const result = deleteSlotSchema.safeParse({ params: { slotId: 'not-a-uuid' } });
 

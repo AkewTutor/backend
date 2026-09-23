@@ -29,7 +29,7 @@ vi.mock('../../src/utils/jwt.js', () => ({
 import * as guardianshipService from '../../src/services/guardianship.service.js';
 import app from '../../src/app.js';
 
-describe.skip('guardianship.routes.ts', () => {
+describe('guardianship.routes.ts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (guardianshipService.addStudentAndInvite as any).mockResolvedValue({

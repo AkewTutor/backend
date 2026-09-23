@@ -43,7 +43,7 @@ function resetAllMocks() {
   vi.clearAllMocks();
 }
 
-describe.skip('getProfile', () => {
+describe('studentProfile.service.ts', () => {
   beforeEach(() => resetAllMocks());
 
   it('a student retrieves their own profile using their own id as the lookup key', async () => {
@@ -91,7 +91,7 @@ describe.skip('getProfile', () => {
   });
 });
 
-describe.skip('updateBasicProfile', () => {
+describe('updateBasicProfile', () => {
   beforeEach(() => resetAllMocks());
 
   it('a valid image update resolves the updated id/profilePictureUrl', async () => {
@@ -134,7 +134,7 @@ describe.skip('updateBasicProfile', () => {
   });
 });
 
-describe.skip('updateAcademicProfile', () => {
+describe('updateAcademicProfile', () => {
   beforeEach(() => resetAllMocks());
 
   it('a partial update touches only the supplied fields, not every field reset to a default', async () => {
@@ -188,7 +188,7 @@ describe.skip('updateAcademicProfile', () => {
   });
 });
 
-describe.skip('assertAccountStatusAllowsAccess', () => {
+describe('assertAccountStatusAllowsAccess', () => {
   beforeEach(() => resetAllMocks());
 
   it('an ACTIVE account resolves silently, with no return value', async () => {

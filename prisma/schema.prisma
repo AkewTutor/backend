@@ -55,6 +55,8 @@ enum NotificationType {
   EARNING_CREDITED
   PAYOUT_PROCESSED
   COMPLAINT_STATUS_UPDATE
+  GUARDIAN_INVITE
+  GUARDIAN_INVITE_RESEND
   COMPLAINT_RESOLVED
   PLATFORM_ANNOUNCEMENT
   NEW_MESSAGE
@@ -98,23 +100,42 @@ enum TutorVerificationStatus {
   REJECTED
 }
 
+enum RelationshipType {
+  MANDATORY_GUARDIAN
+  OPTIONAL_GUARDIAN
+}
+
+enum RelationshipStatus {
+  INVITED
+  ACTIVE
+  REVOKED
+}
+
+enum UserAccountStatus {
+  ACTIVE
+  SUSPENDED
+  RESTRICTED
+}
+
 // ─────────────────────────────────────────────────────────────
 // Models
 // ─────────────────────────────────────────────────────────────
 
 model User {
-  id                           String        @id @default(uuid())
+  id                           String            @id @default(uuid())
+  name                         String?
   role                         UserRole
-  email                        String?       @unique
-  phone                        String?       @unique
+  email                        String?           @unique
+  phone                        String?           @unique
   passwordHash                 String
   emailVerifiedAt              DateTime?
   phoneVerifiedAt              DateTime?
   preferredNotificationChannel NotifChannel?
   termsAcceptedAt              DateTime
-  failedLoginCount             Int           @default(0) 
-  createdAt                    DateTime      @default(now())
-  updatedAt                    DateTime      @updatedAt
+  failedLoginCount             Int               @default(0)
+  status                       UserAccountStatus @default(ACTIVE)
+  createdAt                    DateTime          @default(now())
+  updatedAt                    DateTime          @updatedAt
 
   // 1:1 profile rows — at most one populated per User, determined by
   // `role` at registration and never changed afterward (Doc 04 §4.2.1).
@@ -125,13 +146,14 @@ model User {
 
   // TutorProfile.verifiedBy is a second FK to User, so that relation is
   // explicitly named; its inverse lives here.
-  verifiedTutors TutorProfile[]  @relation("TutorVerifiedBy")
+  verifiedTutors TutorProfile[] @relation("TutorVerifiedBy")
 
-  refreshTokens     RefreshToken[]
-  notifications     Notification[]
-  publishedPolicies PolicyDocument[]
-  auditLogs         AuditLog[]
-  announcements     Announcement[]
+  refreshTokens        RefreshToken[]
+  notifications        Notification[]
+  publishedPolicies    PolicyDocument[]
+  auditLogs            AuditLog[]
+  announcements        Announcement[]
+  revokedRelationships ParentStudentRelationship[]
 }
 
 model StudentProfile {
@@ -155,12 +177,9 @@ model StudentProfile {
   createdAt                  DateTime             @default(now())
   updatedAt                  DateTime             @updatedAt
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  // Relations to MatchRequest, CohortMembership, XPLedgerEntry,
-  // StudentBadge, Streak, ChallengeProgress, Payment, PaymentPause,
-  // TutorExclusion, ParentStudentRelationship are added when those
-  // models land in later phases (Doc 05a §10).
+  user                  User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  guardianRelationships ParentStudentRelationship[]
+  cohortMemberships     CohortMembership[]
 }
 
 model ParentProfile {
@@ -171,9 +190,8 @@ model ParentProfile {
   createdAt         DateTime               @default(now())
   updatedAt         DateTime               @updatedAt
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  // studentRelationships (ParentStudentRelationship[]) added in Phase 2.
+  user                 User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  studentRelationships ParentStudentRelationship[]
 }
 
 model TutorProfile {
@@ -195,8 +213,9 @@ model TutorProfile {
   // tutor must not delete the tutor's profile; it just nulls the pointer.
   verifiedBy User? @relation("TutorVerifiedBy", fields: [verifiedById], references: [id], onDelete: SetNull)
 
-  // subjectRankings, availabilitySlots, cohorts, tutorBadges,
-  // tutorEarnings, payouts added in later phases.
+  subjectRankings   TutorSubjectRanking[]
+  availabilitySlots AvailabilitySlot[]
+  cohorts           Cohort[]
 }
 
 model RefreshToken {
@@ -297,4 +316,157 @@ model Announcement {
   createdBy User @relation(fields: [createdById], references: [id])
 
   @@index([createdAt])
+}
+
+model ParentStudentRelationship {
+  id               String             @id @default(uuid())
+  parentId         String
+  studentId        String
+  relationshipType RelationshipType
+  status           RelationshipStatus @default(INVITED)
+  permissions      Json               @default("{}")
+  invitedAt        DateTime           @default(now())
+  inviteExpiresAt  DateTime
+  inviteToken      String             @unique
+  activatedAt      DateTime?
+  revokedAt        DateTime?
+  revokedById      String?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  parent    ParentProfile  @relation(fields: [parentId], references: [id])
+  student   StudentProfile @relation(fields: [studentId], references: [id])
+  revokedBy User?          @relation(fields: [revokedById], references: [id])
+
+  @@unique([parentId, studentId])
+}
+
+model Subject {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tutorRankings TutorSubjectRanking[]
+  cohorts       Cohort[]
+}
+
+model TutorSubjectRanking {
+  id        String   @id @default(uuid())
+  tutorId   String
+  subjectId String
+  rank      Int
+  createdAt DateTime @default(now())
+
+  tutor   TutorProfile @relation(fields: [tutorId], references: [id])
+  subject Subject      @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+
+  @@unique([tutorId, rank])
+  @@unique([tutorId, subjectId])
+}
+
+model AvailabilitySlot {
+  id          String   @id @default(uuid())
+  tutorId     String
+  dayOfWeek   Int?
+  startTime   DateTime
+  endTime     DateTime
+  isRecurring Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  tutor TutorProfile @relation(fields: [tutorId], references: [id])
+}
+
+enum CohortStatus {
+  PENDING
+  ACTIVE
+  ENDED
+}
+
+enum MembershipStatus {
+  PENDING_PAYMENT
+  ACTIVE
+  FAILED
+  REFUNDED
+}
+
+model Cohort {
+  id                            String         @id @default(uuid())
+  tutorId                       String
+  subjectId                     String
+  status                        CohortStatus   @default(PENDING)
+  format                        TutoringFormat @default(ONE_TO_ONE)
+  schedule                      Json?
+  targetGroupSize               Int?
+  groupFormationWindowExpiresAt DateTime?
+  sessionsPerWeek               Int?
+  adminApprovedAt               DateTime?
+  adminApprovedById             String?
+  adminOverdueNotifiedAt        DateTime?
+  studentDelayNotifiedAt        DateTime?
+  endedAt                       DateTime?
+  endedReason                   String?
+  createdAt                     DateTime       @default(now())
+  updatedAt                     DateTime       @updatedAt
+
+  tutor       TutorProfile       @relation(fields: [tutorId], references: [id])
+  subject     Subject            @relation(fields: [subjectId], references: [id])
+  memberships CohortMembership[]
+}
+
+model CohortMembership {
+  id                     String           @id @default(uuid())
+  cohortId               String
+  studentId              String
+  status                 MembershipStatus @default(ACTIVE)
+  billingCycleAnchorDate DateTime?
+  joinedAt               DateTime         @default(now())
+  endedAt                DateTime?
+  endReason              String?
+  createdAt              DateTime         @default(now())
+  updatedAt              DateTime         @updatedAt
+
+  cohort  Cohort         @relation(fields: [cohortId], references: [id])
+  student StudentProfile @relation(fields: [studentId], references: [id])
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+model Payment {
+  id                    String        @id @default(uuid())
+  cohortMembershipId    String
+  amount                Decimal
+  provider              String        @default("CHAPA")
+  providerTransactionId String?
+  status                PaymentStatus @default(PENDING)
+  billingPeriodStart    DateTime      @default(now())
+  billingPeriodEnd      DateTime      @default(now())
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  // We are not adding the strict relations for Payment in the stub
+  // since it connects to CohortMembership which might require inverse relations.
+  // We'll leave it as flat fields for the stub so Prisma validates the shape.
+}
+
+model XPLedgerEntry {
+  id        String   @id @default(uuid())
+  studentId String
+  amount    Int
+  reason    String   @default("LESSON_ATTENDED")
+  note      String?
+  createdAt DateTime @default(now())
+}
+
+model Streak {
+  id                String    @id @default(uuid())
+  studentId         String
+  currentStreakDays Int       @default(0)
+  longestStreakDays Int       @default(0)
+  lastActivityDate  DateTime?
 }

@@ -32,7 +32,7 @@ function resetAllMocks() {
   vi.clearAllMocks();
 }
 
-describe.skip('setSlots / listSlots', () => {
+describe('setSlots / listSlots', () => {
   beforeEach(() => resetAllMocks());
 
   it('creates a valid slot', async () => {
@@ -73,7 +73,7 @@ describe.skip('setSlots / listSlots', () => {
   });
 });
 
-describe.skip('removeSlot', () => {
+describe('removeSlot', () => {
   beforeEach(() => resetAllMocks());
 
   it('an owner removes their own unused slot', async () => {

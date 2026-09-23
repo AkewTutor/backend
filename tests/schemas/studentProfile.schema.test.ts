@@ -11,7 +11,7 @@ import { describe, expect, it } from 'vitest';
 
 import { updateAcademicProfileSchema } from '../../src/schemas/studentProfile.schema.js';
 
-describe.skip('updateAcademicProfileSchema', () => {
+describe('updateAcademicProfileSchema', () => {
   it('accepts a fully-empty partial update — every field optional per the partial-update semantics', () => {
     const result = updateAcademicProfileSchema.safeParse({ body: {} });
 

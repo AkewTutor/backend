@@ -14,7 +14,7 @@ import {
   revokeRelationshipSchema,
 } from '../../src/schemas/guardianship.schema.js';
 
-describe.skip('addStudentSchema', () => {
+describe('addStudentSchema', () => {
   it('requires grade in 1–12 — grade 0 fails', () => {
     const result = addStudentSchema.safeParse({ body: { grade: 0, inviteContact: 'a@b.com' } });
 
@@ -34,7 +34,7 @@ describe.skip('addStudentSchema', () => {
   });
 });
 
-describe.skip('inviteGuardianSchema', () => {
+describe('inviteGuardianSchema', () => {
   it('requires a non-empty contact', () => {
     const result = inviteGuardianSchema.safeParse({ body: { inviteContact: '' } });
 
@@ -50,7 +50,7 @@ describe.skip('inviteGuardianSchema', () => {
   });
 });
 
-describe.skip('revokeRelationshipSchema', () => {
+describe('revokeRelationshipSchema', () => {
   it('defaults revoke to false on an empty body', () => {
     const result = revokeRelationshipSchema.safeParse({ body: {} });
 
