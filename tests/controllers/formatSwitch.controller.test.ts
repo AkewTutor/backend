@@ -17,7 +17,7 @@ vi.mock('../../src/services/formatSwitch.service.js', () => ({
 import * as formatSwitchService from '../../src/services/formatSwitch.service.js';
 import { requestSwitch as requestSwitchController } from '../../src/controllers/formatSwitch.controller.js';
 
-function mockReq(overrides: Partial<Request> = {}): Request {
+function mockReq(overrides: any = {}): any {
   return {
     body: {},
     params: {},
@@ -36,7 +36,7 @@ function mockRes() {
 
 const studentId = randomUUID();
 
-describe.skip('formatSwitch.controller.ts', () => {
+describe('formatSwitch.controller.ts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });

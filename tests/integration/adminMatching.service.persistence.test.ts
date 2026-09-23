@@ -57,10 +57,12 @@ async function seedVerifiedTutor(subjectId: string) {
 
 async function seedStudent() {
   const studentUser = await prisma.user.create({ data: buildUser({ role: 'STUDENT' }) });
-  return prisma.studentProfile.create({ data: buildStudentProfile({ userId: studentUser.id }) });
+  return prisma.studentProfile.create({
+    data: buildStudentProfile({ userId: studentUser.id }) as any,
+  });
 }
 
-describe.skip('manuallyAssignTutor / manuallyAssembleGroup — real claim race', () => {
+describe('manuallyAssignTutor / manuallyAssembleGroup — real claim race', () => {
   it('two admins racing the same single MatchRequest — real conditional-write guard, not a mocked one', async () => {
     const subject = await prisma.subject.create({ data: buildSubject() });
     const tutor = await seedVerifiedTutor(subject.id);

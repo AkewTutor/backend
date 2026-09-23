@@ -57,7 +57,7 @@ afterEach(async () => {
 async function seedStudentAndTutor() {
   const studentUser = await prisma.user.create({ data: buildUser({ role: 'STUDENT' }) });
   const student = await prisma.studentProfile.create({
-    data: buildStudentProfile({ userId: studentUser.id }),
+    data: buildStudentProfile({ userId: studentUser.id }) as any,
   });
   const tutorUser = await prisma.user.create({ data: buildUser({ role: 'TUTOR' }) });
   const tutor = await prisma.tutorProfile.create({
@@ -67,7 +67,7 @@ async function seedStudentAndTutor() {
   return { student, tutor, subject };
 }
 
-describe.skip('selectTutor — real cohort + membership creation', () => {
+describe('selectTutor — real cohort + membership creation', () => {
   beforeEach(async () => {
     await resetDatabase([
       'Cohort',
@@ -137,11 +137,11 @@ describe.skip('selectTutor — real cohort + membership creation', () => {
   });
 });
 
-describe.skip('FK integrity — real constraint enforcement, not assumed', () => {
+describe('FK integrity — real constraint enforcement, not assumed', () => {
   it('non-existent tutorId is rejected by a real foreign-key constraint, translated to a clean ApiError', async () => {
     const studentUser = await prisma.user.create({ data: buildUser({ role: 'STUDENT' }) });
     const student = await prisma.studentProfile.create({
-      data: buildStudentProfile({ userId: studentUser.id }),
+      data: buildStudentProfile({ userId: studentUser.id }) as any,
     });
     await prisma.subject.create({ data: buildSubject() });
 
@@ -151,7 +151,7 @@ describe.skip('FK integrity — real constraint enforcement, not assumed', () =>
   });
 });
 
-describe.skip('TutorExclusion — real unique constraint', () => {
+describe('TutorExclusion — real unique constraint', () => {
   it('the (studentId, tutorId) unique composite is real, not merely documented', async () => {
     const { student, tutor } = await seedStudentAndTutor();
     await prisma.tutorExclusion.create({

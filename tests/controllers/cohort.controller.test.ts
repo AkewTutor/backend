@@ -19,7 +19,7 @@ import * as cohortService from '../../src/services/cohort.service.js';
 import { getCohortMembers, getMyCohort } from '../../src/controllers/cohort.controller.js';
 import ApiError from '../../src/utils/ApiError.js';
 
-function mockReq(overrides: Partial<Request> = {}): Request {
+function mockReq(overrides: any = {}): any {
   return {
     body: {},
     params: {},
@@ -38,7 +38,7 @@ function mockRes() {
 
 const cohortId = randomUUID();
 
-describe.skip('cohort.controller.ts', () => {
+describe('cohort.controller.ts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });

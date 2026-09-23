@@ -1,11 +1,19 @@
-// STUB: auto-generated placeholder to satisfy TypeScript module resolution.
-// TODO: implement real logic.
-import type { Request, Response, NextFunction } from 'express';
-import asyncHandler from '../utils/asyncHandler.js';
-import ApiError from '../utils/ApiError.js';
+import type { Response, NextFunction } from 'express';
+import { AuthRequest } from '../types/index.js';
+import * as formatSwitchService from '../services/formatSwitch.service.js';
 
-export const requestSwitch = asyncHandler(
-  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    throw new ApiError(501, 'requestSwitch not implemented');
-  },
-);
+export async function requestSwitch(
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const user = req.user!;
+    const { studentId, toFormat } = req.body;
+
+    const result = await formatSwitchService.requestSwitch(user.id, user.role, studentId, toFormat);
+    res.status(201).json(result);
+  } catch (error) {
+    next(error);
+  }
+}

@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest';
 
 import { requestFormatSwitchSchema } from '../../src/schemas/formatSwitch.schema.js';
 
-describe.skip('requestFormatSwitchSchema', () => {
+describe('requestFormatSwitchSchema', () => {
   it('requires a valid toFormat enum value', () => {
     const result = requestFormatSwitchSchema.safeParse({ body: { toFormat: 'ONE_TO_TWO' } });
 

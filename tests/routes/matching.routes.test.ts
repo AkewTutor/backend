@@ -45,7 +45,7 @@ const endpoints: Array<[string, string, Record<string, unknown>?]> = [
   ['get', '/api/v1/matching/requests/me'],
 ];
 
-describe.skip('matching.routes.ts', () => {
+describe('matching.routes.ts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (matchingService.searchOneToOneTutors as any).mockResolvedValue({ tutors: [] });

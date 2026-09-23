@@ -53,6 +53,52 @@ async function main() {
     }
   }
 
+  // 3. Seed PricingConfig (Phase 3)
+  const adminUser = await prisma.user.findFirst({ where: { role: 'ADMIN' } });
+  if (adminUser) {
+    const formats = [
+      {
+        format: 'ONE_TO_ONE',
+        pricePerStudentPerHour: 400,
+        totalPerHour: 400,
+        platformSharePerHour: 100,
+        tutorSharePerHour: 300,
+      },
+      {
+        format: 'ONE_TO_THREE',
+        pricePerStudentPerHour: 200,
+        totalPerHour: 600,
+        platformSharePerHour: 200,
+        tutorSharePerHour: 400,
+      },
+      {
+        format: 'ONE_TO_FIVE',
+        pricePerStudentPerHour: 150,
+        totalPerHour: 750,
+        platformSharePerHour: 250,
+        tutorSharePerHour: 500,
+      },
+    ];
+
+    for (const config of formats) {
+      const existingConfig = await prisma.pricingConfig.findUnique({
+        where: { format: config.format as any },
+      });
+      if (!existingConfig) {
+        await prisma.pricingConfig.create({
+          data: {
+            ...config,
+            isActive: true,
+            createdById: adminUser.id,
+          },
+        });
+        console.log(`Created default PricingConfig for: ${config.format}`);
+      }
+    }
+  } else {
+    console.warn('Cannot seed PricingConfig: No ADMIN user found.');
+  }
+
   console.log('Seeding finished.');
 }
 

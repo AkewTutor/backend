@@ -35,7 +35,7 @@ const tutorId = randomUUID();
 const adminAuth = { Authorization: 'Bearer admin.jwt.token' };
 const tutorAuth = { Authorization: 'Bearer tutor.jwt.token' };
 
-describe.skip('adminMatching.routes.ts', () => {
+describe('adminMatching.routes.ts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (adminMatchingService.listPendingApprovals as any).mockResolvedValue({

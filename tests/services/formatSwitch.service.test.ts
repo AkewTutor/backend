@@ -27,6 +27,9 @@ vi.mock('../../src/config/db.js', () => ({
       findUnique: vi.fn(),
       findMany: vi.fn(),
     },
+    formatSwitchRequest: {
+      create: vi.fn(),
+    },
   },
 }));
 
@@ -76,7 +79,7 @@ function resetAllMocks() {
   (prisma.cohortMembership.update as any).mockResolvedValue({ id: membershipId, status: 'ENDED' });
 }
 
-describe.skip('requestSwitch', () => {
+describe('requestSwitch', () => {
   beforeEach(() => resetAllMocks());
 
   it('successful switch from 1-to-1 to 1-to-3', async () => {

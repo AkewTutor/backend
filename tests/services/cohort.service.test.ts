@@ -15,8 +15,8 @@
 import { randomUUID } from 'node:crypto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('../../src/config/db.js', () => ({
-  prisma: {
+vi.mock('../../src/config/db.js', () => {
+  const p = {
     cohort: {
       findUnique: vi.fn(),
       findFirst: vi.fn(),
@@ -42,8 +42,50 @@ vi.mock('../../src/config/db.js', () => ({
     tutorProfile: {
       findMany: vi.fn(),
     },
-  },
-}));
+  } as any;
+  p.$transaction = vi.fn(async (cb: any) => cb(p));
+  p.$queryRaw = vi.fn().mockResolvedValue([]);
+  if (!p.matchRequest) p.matchRequest = {};
+  p.matchRequest.findUniqueOrThrow = vi
+    .fn()
+    .mockResolvedValue({ subjectId: 'dummy', studentId: 'dummy' });
+  if (!p.tutorExclusion) p.tutorExclusion = {};
+  p.tutorExclusion.upsert = vi.fn().mockResolvedValue({});
+  if (!p.studentProfile) p.studentProfile = {};
+  p.studentProfile.findUnique = vi.fn().mockResolvedValue({ userId: 'dummy-user' });
+  if (!p.notification) p.notification = {};
+  p.notification.create = vi.fn().mockResolvedValue({});
+  if (!p.cohort) p.cohort = {};
+  if (!p.cohort.create) p.cohort.create = vi.fn().mockResolvedValue({ id: 'dummy-cohort' });
+
+  if (!p.matchRequest) p.matchRequest = {};
+  if (!p.matchRequest.findUniqueOrThrow)
+    p.matchRequest.findUniqueOrThrow = vi
+      .fn()
+      .mockResolvedValue({ subjectId: 'dummy', studentId: 'dummy' });
+  if (!p.tutorExclusion) p.tutorExclusion = {};
+  if (!p.tutorExclusion.upsert) p.tutorExclusion.upsert = vi.fn().mockResolvedValue({});
+  if (!p.studentProfile) p.studentProfile = {};
+  if (!p.studentProfile.findUnique)
+    p.studentProfile.findUnique = vi.fn().mockResolvedValue({ userId: 'dummy-user' });
+  if (!p.notification) p.notification = {};
+  if (!p.notification.create) p.notification.create = vi.fn().mockResolvedValue({});
+  if (!p.cohort) p.cohort = {};
+  if (!p.cohort.create) p.cohort.create = vi.fn().mockResolvedValue({ id: 'dummy-cohort' });
+  if (!p.tutorProfile) p.tutorProfile = {};
+  if (!p.tutorProfile.findFirst)
+    p.tutorProfile.findFirst = vi.fn().mockResolvedValue({ id: 'dummy-tutor' });
+  if (!p.cohortMembership) p.cohortMembership = {};
+  if (!p.cohortMembership.findFirst) p.cohortMembership.findFirst = vi.fn().mockResolvedValue(null);
+  p.$queryRaw = vi.fn().mockImplementation(async (query) => {
+    const qStr = String(query);
+    if (qStr.includes('Cohort')) return p.cohort?.findFirst?.() ? [await p.cohort.findFirst()] : [];
+    if (qStr.includes('StudentProfile'))
+      return p.studentProfile?.findUnique?.() ? [await p.studentProfile.findUnique()] : [];
+    return [];
+  });
+  return { prisma: p };
+});
 
 vi.mock('../../src/services/adminMatching.service.js', () => ({
   manuallyAssignTutor: vi.fn(),
@@ -79,7 +121,7 @@ function resetAllMocks() {
   (dispatchNotification as any).mockResolvedValue(undefined);
 }
 
-describe.skip('formOrJoinCohort', () => {
+describe('formOrJoinCohort', () => {
   beforeEach(() => resetAllMocks());
 
   it('joins an existing compatible FORMING cohort', async () => {
@@ -157,6 +199,7 @@ describe.skip('formOrJoinCohort', () => {
     // The conditional write reports zero rows affected — someone else took the last seat.
     (prisma.cohortMembership.updateMany as any).mockResolvedValue({ count: 0 });
 
+    (prisma.cohortMembership.create as any).mockClear();
     await expect(formOrJoinCohort(matchRequestId)).rejects.toMatchObject({
       statusCode: 409,
     });
@@ -184,7 +227,7 @@ describe.skip('formOrJoinCohort', () => {
   });
 });
 
-describe.skip('approveCohort / rejectCohort', () => {
+describe('approveCohort / rejectCohort', () => {
   beforeEach(() => resetAllMocks());
 
   it('approveCohort moves state forward', async () => {
@@ -267,7 +310,7 @@ describe.skip('approveCohort / rejectCohort', () => {
   });
 });
 
-describe.skip('tutorExitContinuity', () => {
+describe('tutorExitContinuity', () => {
   beforeEach(() => resetAllMocks());
 
   const memberships = Array.from({ length: 5 }, (_, i) => ({
@@ -401,7 +444,7 @@ describe.skip('tutorExitContinuity', () => {
   });
 });
 
-describe.skip('endCohort', () => {
+describe('endCohort', () => {
   beforeEach(() => resetAllMocks());
 
   it('sets status, endedAt, and endedReason — the field archiveMessageThreads.job.ts keys off of', async () => {
@@ -424,7 +467,7 @@ describe.skip('endCohort', () => {
   });
 });
 
-describe.skip('getMyCohort / getCohortMembers', () => {
+describe('getMyCohort / getCohortMembers', () => {
   beforeEach(() => resetAllMocks());
 
   it('no cohort yet resolves { cohorts: [] }, not an error', async () => {

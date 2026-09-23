@@ -26,7 +26,7 @@ import app from '../../src/app.js';
 const cohortId = randomUUID();
 const authHeader = { Authorization: 'Bearer valid.jwt.token' };
 
-describe.skip('cohort.routes.ts', () => {
+describe('cohort.routes.ts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (cohortService.getMyCohort as any).mockResolvedValue({ cohorts: [] });

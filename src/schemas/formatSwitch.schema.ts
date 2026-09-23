@@ -1,9 +1,8 @@
-// STUB: auto-generated placeholder to satisfy TypeScript module resolution.
-// TODO: implement real logic.
 import { z } from 'zod';
 
 export const requestFormatSwitchSchema = z.object({
-  body: z.record(z.string(), z.unknown()).optional(),
-  params: z.record(z.string(), z.unknown()).optional(),
-  query: z.record(z.string(), z.unknown()).optional(),
+  body: z.object({
+    toFormat: z.enum(['ONE_TO_ONE', 'ONE_TO_THREE', 'ONE_TO_FIVE']),
+    studentId: z.string().uuid().optional(),
+  }),
 });

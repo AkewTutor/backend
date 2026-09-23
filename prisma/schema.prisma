@@ -154,6 +154,8 @@ model User {
   auditLogs            AuditLog[]
   announcements        Announcement[]
   revokedRelationships ParentStudentRelationship[]
+  cohorts              Cohort[]
+  pricingConfigs       PricingConfig[]
 }
 
 model StudentProfile {
@@ -180,6 +182,9 @@ model StudentProfile {
   user                  User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
   guardianRelationships ParentStudentRelationship[]
   cohortMemberships     CohortMembership[]
+  matchRequests         MatchRequest[]
+  tutorExclusions       TutorExclusion[]
+  formatSwitchRequests  FormatSwitchRequest[]
 }
 
 model ParentProfile {
@@ -216,6 +221,7 @@ model TutorProfile {
   subjectRankings   TutorSubjectRanking[]
   availabilitySlots AvailabilitySlot[]
   cohorts           Cohort[]
+  tutorExclusions   TutorExclusion[]
 }
 
 model RefreshToken {
@@ -350,6 +356,7 @@ model Subject {
 
   tutorRankings TutorSubjectRanking[]
   cohorts       Cohort[]
+  matchRequests MatchRequest[]
 }
 
 model TutorSubjectRanking {
@@ -379,24 +386,26 @@ model AvailabilitySlot {
 }
 
 enum CohortStatus {
-  PENDING
+  FORMING
+  PENDING_ADMIN_APPROVAL
+  PENDING_PAYMENT
   ACTIVE
   ENDED
+  CANCELLED
 }
 
 enum MembershipStatus {
   PENDING_PAYMENT
   ACTIVE
-  FAILED
-  REFUNDED
+  ENDED
 }
 
 model Cohort {
-  id                            String         @id @default(uuid())
+  id                            String           @id @default(uuid())
   tutorId                       String
   subjectId                     String
-  status                        CohortStatus   @default(PENDING)
-  format                        TutoringFormat @default(ONE_TO_ONE)
+  status                        CohortStatus     @default(FORMING)
+  format                        TutoringFormat   @default(ONE_TO_ONE)
   schedule                      Json?
   targetGroupSize               Int?
   groupFormationWindowExpiresAt DateTime?
@@ -406,29 +415,32 @@ model Cohort {
   adminOverdueNotifiedAt        DateTime?
   studentDelayNotifiedAt        DateTime?
   endedAt                       DateTime?
-  endedReason                   String?
-  createdAt                     DateTime       @default(now())
-  updatedAt                     DateTime       @updatedAt
+  endedReason                   CohortEndReason?
+  createdAt                     DateTime         @default(now())
+  updatedAt                     DateTime         @updatedAt
 
-  tutor       TutorProfile       @relation(fields: [tutorId], references: [id])
-  subject     Subject            @relation(fields: [subjectId], references: [id])
-  memberships CohortMembership[]
+  tutor           TutorProfile       @relation(fields: [tutorId], references: [id])
+  subject         Subject            @relation(fields: [subjectId], references: [id])
+  memberships     CohortMembership[]
+  adminApprovedBy User?              @relation(fields: [adminApprovedById], references: [id])
+  matchRequests   MatchRequest[]
 }
 
 model CohortMembership {
-  id                     String           @id @default(uuid())
+  id                     String               @id @default(uuid())
   cohortId               String
   studentId              String
-  status                 MembershipStatus @default(ACTIVE)
+  status                 MembershipStatus     @default(PENDING_PAYMENT)
   billingCycleAnchorDate DateTime?
-  joinedAt               DateTime         @default(now())
+  joinedAt               DateTime             @default(now())
   endedAt                DateTime?
-  endReason              String?
-  createdAt              DateTime         @default(now())
-  updatedAt              DateTime         @updatedAt
+  endReason              MembershipEndReason?
+  createdAt              DateTime             @default(now())
+  updatedAt              DateTime             @updatedAt
 
-  cohort  Cohort         @relation(fields: [cohortId], references: [id])
-  student StudentProfile @relation(fields: [studentId], references: [id])
+  cohort         Cohort                @relation(fields: [cohortId], references: [id])
+  student        StudentProfile        @relation(fields: [studentId], references: [id])
+  formatSwitches FormatSwitchRequest[]
 }
 
 enum PaymentStatus {
@@ -469,4 +481,101 @@ model Streak {
   currentStreakDays Int       @default(0)
   longestStreakDays Int       @default(0)
   lastActivityDate  DateTime?
+}
+
+// ---- PHASE 3: MATCHING & COHORTS ----
+
+enum MatchPath {
+  PATH_A
+  PATH_B
+  PATH_C
+}
+
+enum MatchRequestStatus {
+  SEARCHING
+  ZERO_MATCH_PENDING
+  PENDING_ADMIN_ASSIGNMENT
+  MATCHED
+  CANCELLED
+}
+
+enum ExclusionReason {
+  ADMIN_REJECTED
+}
+
+enum CohortEndReason {
+  COMPLETED
+  TUTOR_DROPOUT
+  TUTOR_SUSPENDED
+  FORMAT_SWITCH
+  ADMIN_REJECTED
+}
+
+enum MembershipEndReason {
+  COMPLETED
+  FORMAT_SWITCH
+  DROPPED_BY_ADMIN
+}
+
+model MatchRequest {
+  id                String             @id @default(uuid())
+  studentId         String
+  subjectId         String
+  tutorId           String?
+  format            TutoringFormat
+  path              MatchPath
+  status            MatchRequestStatus @default(SEARCHING)
+  zeroMatchSince    DateTime?
+  resultingCohortId String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  student              StudentProfile        @relation(fields: [studentId], references: [id])
+  subject              Subject               @relation(fields: [subjectId], references: [id])
+  resultingCohort      Cohort?               @relation(fields: [resultingCohortId], references: [id])
+  formatSwitchRequests FormatSwitchRequest[]
+}
+
+model TutorExclusion {
+  id        String          @id @default(uuid())
+  studentId String
+  tutorId   String
+  reason    ExclusionReason @default(ADMIN_REJECTED)
+  createdAt DateTime        @default(now())
+
+  student StudentProfile @relation(fields: [studentId], references: [id])
+  tutor   TutorProfile   @relation(fields: [tutorId], references: [id])
+
+  @@unique([studentId, tutorId])
+}
+
+model FormatSwitchRequest {
+  id                String         @id @default(uuid())
+  studentId         String
+  fromMembershipId  String
+  fromFormat        TutoringFormat
+  toFormat          TutoringFormat
+  newMatchRequestId String?
+  refundId          String?
+  requestedAt       DateTime       @default(now())
+  completedAt       DateTime?
+
+  student         StudentProfile   @relation(fields: [studentId], references: [id])
+  fromMembership  CohortMembership @relation(fields: [fromMembershipId], references: [id])
+  newMatchRequest MatchRequest?    @relation(fields: [newMatchRequestId], references: [id])
+}
+
+model PricingConfig {
+  id                     String         @id @default(uuid())
+  format                 TutoringFormat @unique
+  pricePerStudentPerHour Decimal
+  totalPerHour           Decimal
+  platformSharePerHour   Decimal
+  tutorSharePerHour      Decimal
+  isActive               Boolean        @default(false)
+  createdById            String
+  createdAt              DateTime       @default(now())
+  updatedAt              DateTime       @updatedAt
+
+  createdBy User @relation(fields: [createdById], references: [id])
 }

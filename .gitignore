@@ -2,3 +2,7 @@ node_modules/
 dist/
 .env
 *.log
+AI_CONTEXT.md
+OPERATOR_GUIDE.md
+PHASE_3_DOCS.md
+modify_schema.py

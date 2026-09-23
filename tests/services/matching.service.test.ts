@@ -35,8 +35,8 @@
 import { randomUUID } from 'node:crypto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('../../src/config/db.js', () => ({
-  prisma: {
+vi.mock('../../src/config/db.js', () => {
+  const p = {
     matchRequest: {
       findFirst: vi.fn(),
       findUnique: vi.fn(),
@@ -66,8 +66,53 @@ vi.mock('../../src/config/db.js', () => ({
     pricingConfig: {
       findFirst: vi.fn(),
     },
-  },
-}));
+  } as any;
+  p.$transaction = vi.fn(async (cb: any) => cb(p));
+  p.$queryRaw = vi.fn().mockResolvedValue([]);
+  if (!p.matchRequest) p.matchRequest = {};
+  p.matchRequest.findUniqueOrThrow = vi
+    .fn()
+    .mockResolvedValue({ subjectId: 'dummy', studentId: 'dummy' });
+  if (!p.tutorExclusion) p.tutorExclusion = {};
+  p.tutorExclusion.upsert = vi.fn().mockResolvedValue({});
+  if (!p.studentProfile) p.studentProfile = {};
+  p.studentProfile.findUnique = vi.fn().mockResolvedValue({ userId: 'dummy-user' });
+  if (!p.notification) p.notification = {};
+  p.notification.create = vi.fn().mockResolvedValue({});
+  if (!p.cohort) p.cohort = {};
+  if (!p.cohort.create) p.cohort.create = vi.fn().mockResolvedValue({ id: 'dummy-cohort' });
+
+  if (!p.matchRequest) p.matchRequest = {};
+  if (!p.matchRequest.findUniqueOrThrow)
+    p.matchRequest.findUniqueOrThrow = vi
+      .fn()
+      .mockResolvedValue({ subjectId: 'dummy', studentId: 'dummy' });
+  if (!p.tutorExclusion) p.tutorExclusion = {};
+  if (!p.tutorExclusion.upsert) p.tutorExclusion.upsert = vi.fn().mockResolvedValue({});
+  if (!p.studentProfile) p.studentProfile = {};
+  if (!p.studentProfile.findUnique)
+    p.studentProfile.findUnique = vi.fn().mockResolvedValue({ userId: 'dummy-user' });
+  if (!p.notification) p.notification = {};
+  if (!p.notification.create) p.notification.create = vi.fn().mockResolvedValue({});
+  if (!p.cohort) p.cohort = {};
+  if (!p.cohort.create) p.cohort.create = vi.fn().mockResolvedValue({ id: 'dummy-cohort' });
+  if (!p.tutorProfile) p.tutorProfile = {};
+  if (!p.tutorProfile.findFirst)
+    p.tutorProfile.findFirst = vi.fn().mockResolvedValue({ id: 'dummy-tutor' });
+  if (!p.cohortMembership) p.cohortMembership = {};
+  if (!p.cohortMembership.findFirst) p.cohortMembership.findFirst = vi.fn().mockResolvedValue(null);
+  p.$queryRaw = vi.fn().mockImplementation(async (query) => {
+    const qStr = String(query);
+    if (qStr.includes('Cohort')) return p.cohort?.findFirst?.() ? [await p.cohort.findFirst()] : [];
+    if (qStr.includes('StudentProfile'))
+      return p.studentProfile?.findUnique?.() ? [await p.studentProfile.findUnique()] : [];
+    return [];
+  });
+
+  if (!p.subject) p.subject = {};
+  if (!p.subject.findFirst) p.subject.findFirst = vi.fn().mockResolvedValue({ id: 'dummy' });
+  return { prisma: p };
+});
 
 vi.mock('../../src/services/cohort.service.js', () => ({
   createOneToOneCohort: vi.fn(),
@@ -124,7 +169,7 @@ function resetAllMocks() {
   (assertAccountStatusAllowsAccess as any).mockResolvedValue(undefined);
 }
 
-describe.skip('searchOneToOneTutors', () => {
+describe('searchOneToOneTutors', () => {
   beforeEach(() => resetAllMocks());
 
   it('returns matches for a 1-to-1 student', async () => {
@@ -264,7 +309,7 @@ describe.skip('searchOneToOneTutors', () => {
   });
 });
 
-describe.skip('recommendTutorsWithMatchPercent', () => {
+describe('recommendTutorsWithMatchPercent', () => {
   beforeEach(() => resetAllMocks());
 
   it('hard filters applied before any scoring — a hard-filter-failing tutor never appears, never scores 0%', async () => {
@@ -572,7 +617,7 @@ describe.skip('recommendTutorsWithMatchPercent', () => {
   });
 });
 
-describe.skip('injection.test.ts — [Phase 4, OWASP A03:2021] searchOneToOneTutors language filter', () => {
+describe('injection.test.ts — [Phase 4, OWASP A03:2021] searchOneToOneTutors language filter', () => {
   beforeEach(() => resetAllMocks());
 
   it('regex-DoS payload in language does not hang the query', async () => {
@@ -639,7 +684,7 @@ describe.skip('injection.test.ts — [Phase 4, OWASP A03:2021] searchOneToOneTut
   });
 });
 
-describe.skip('selectTutor', () => {
+describe('selectTutor', () => {
   beforeEach(() => resetAllMocks());
 
   it('successful selection resolves the documented shape and delegates cohort creation', async () => {
@@ -709,7 +754,7 @@ describe.skip('selectTutor', () => {
   });
 });
 
-describe.skip('triggerNoExactMatch', () => {
+describe('triggerNoExactMatch', () => {
   beforeEach(() => resetAllMocks());
 
   it('manual trigger produces the standard Path B state', async () => {
@@ -747,7 +792,7 @@ describe.skip('triggerNoExactMatch', () => {
   });
 });
 
-describe.skip('requestGroupFormat', () => {
+describe('requestGroupFormat', () => {
   beforeEach(() => resetAllMocks());
 
   it('1-to-3/1-to-5 caller succeeds', async () => {
@@ -814,7 +859,7 @@ describe.skip('requestGroupFormat', () => {
   });
 });
 
-describe.skip('Status read path (getMyRequestStatus / getTutorDetail)', () => {
+describe('Status read path (getMyRequestStatus / getTutorDetail)', () => {
   beforeEach(() => resetAllMocks());
 
   it('no active request throws 404', async () => {

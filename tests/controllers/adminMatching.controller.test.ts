@@ -27,7 +27,7 @@ import {
   reject,
 } from '../../src/controllers/adminMatching.controller.js';
 
-function mockReq(overrides: Partial<Request> = {}): Request {
+function mockReq(overrides: any = {}): any {
   return {
     body: {},
     params: {},
@@ -47,7 +47,7 @@ function mockRes() {
 const cohortId = randomUUID();
 const tutorId = randomUUID();
 
-describe.skip('adminMatching.controller.ts', () => {
+describe('adminMatching.controller.ts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });

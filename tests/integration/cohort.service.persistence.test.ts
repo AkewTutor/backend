@@ -54,10 +54,12 @@ async function seedTutorAndSubject() {
 
 async function seedStudent() {
   const studentUser = await prisma.user.create({ data: buildUser({ role: 'STUDENT' }) });
-  return prisma.studentProfile.create({ data: buildStudentProfile({ userId: studentUser.id }) });
+  return prisma.studentProfile.create({
+    data: buildStudentProfile({ userId: studentUser.id }) as any,
+  });
 }
 
-describe.skip('formOrJoinCohort — real cohort/membership lifecycle', () => {
+describe('formOrJoinCohort — real cohort/membership lifecycle', () => {
   it('creates a real Cohort when no compatible FORMING cohort exists', async () => {
     const { subject } = await seedTutorAndSubject();
     const student = await seedStudent();
@@ -197,7 +199,7 @@ describe.skip('formOrJoinCohort — real cohort/membership lifecycle', () => {
   });
 });
 
-describe.skip('tutorExitContinuity — real multi-row spawn and FK integrity', () => {
+describe('tutorExitContinuity — real multi-row spawn and FK integrity', () => {
   it('spawns exactly one real MatchRequest row per affected membership', async () => {
     const { tutor, subject } = await seedTutorAndSubject();
     const cohort = await prisma.cohort.create({

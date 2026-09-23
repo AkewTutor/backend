@@ -34,7 +34,7 @@ import {
   selectTutor,
 } from '../../src/controllers/matching.controller.js';
 
-function mockReq(overrides: Partial<Request> = {}): Request {
+function mockReq(overrides: any = {}): any {
   return {
     body: {},
     params: {},
@@ -55,7 +55,7 @@ const tutorId = randomUUID();
 const studentId = randomUUID();
 const subjectId = randomUUID();
 
-describe.skip('matching.controller.ts', () => {
+describe('matching.controller.ts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });

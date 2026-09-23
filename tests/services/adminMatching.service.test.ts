@@ -14,8 +14,8 @@
 import { randomUUID } from 'node:crypto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('../../src/config/db.js', () => ({
-  prisma: {
+vi.mock('../../src/config/db.js', () => {
+  const p = {
     cohort: {
       findUnique: vi.fn(),
       update: vi.fn(),
@@ -35,8 +35,23 @@ vi.mock('../../src/config/db.js', () => ({
       findUnique: vi.fn(),
       findMany: vi.fn(),
     },
-  },
-}));
+  } as any;
+  p.$transaction = vi.fn(async (cb: any) => cb(p));
+  p.$queryRaw = vi.fn().mockResolvedValue([]);
+  if (!p.matchRequest) p.matchRequest = {};
+  p.matchRequest.findUniqueOrThrow = vi
+    .fn()
+    .mockResolvedValue({ subjectId: 'dummy', studentId: 'dummy' });
+  if (!p.tutorExclusion) p.tutorExclusion = {};
+  p.tutorExclusion.upsert = vi.fn().mockResolvedValue({});
+  if (!p.studentProfile) p.studentProfile = {};
+  p.studentProfile.findUnique = vi.fn().mockResolvedValue({ userId: 'dummy-user' });
+  if (!p.notification) p.notification = {};
+  p.notification.create = vi.fn().mockResolvedValue({});
+  if (!p.cohort) p.cohort = {};
+  if (!p.cohort.create) p.cohort.create = vi.fn().mockResolvedValue({ id: 'dummy-cohort' });
+  return { prisma: p };
+});
 
 vi.mock('../../src/services/cohort.service.js', () => ({
   rejectCohort: vi.fn(),
@@ -68,7 +83,7 @@ function resetAllMocks() {
   (dispatchNotification as any).mockResolvedValue(undefined);
 }
 
-describe.skip('listPendingApprovals', () => {
+describe('listPendingApprovals', () => {
   beforeEach(() => resetAllMocks());
 
   it('overdue items always sort to top regardless of filter', async () => {
@@ -135,7 +150,7 @@ describe.skip('listPendingApprovals', () => {
   });
 });
 
-describe.skip('approveBooking / rejectBooking', () => {
+describe('approveBooking / rejectBooking', () => {
   beforeEach(() => resetAllMocks());
 
   it('approve moves cohort to PENDING_PAYMENT', async () => {
@@ -203,7 +218,7 @@ describe.skip('approveBooking / rejectBooking', () => {
   });
 });
 
-describe.skip('manuallyAssignTutor / manuallyAssembleGroup', () => {
+describe('manuallyAssignTutor / manuallyAssembleGroup', () => {
   beforeEach(() => resetAllMocks());
 
   it('assign a single MatchRequest (Path B) — resolves a CohortAssignmentDTO, status PENDING_PAYMENT directly', async () => {
@@ -219,7 +234,9 @@ describe.skip('manuallyAssignTutor / manuallyAssembleGroup', () => {
         studentId: 'student-1',
       },
     ]);
-    (prisma.matchRequest.updateMany as any).mockResolvedValue({ count: 1 });
+    (prisma.matchRequest.updateMany as any).mockImplementation((args: any) =>
+      Promise.resolve({ count: args.where.id.in.length }),
+    );
     (prisma.cohort.create as any).mockResolvedValue({
       id: 'new-cohort',
       status: 'PENDING_PAYMENT',
@@ -324,7 +341,9 @@ describe.skip('manuallyAssignTutor / manuallyAssembleGroup', () => {
           studentId: randomUUID(),
         })),
       );
-    (prisma.matchRequest.updateMany as any).mockResolvedValue({ count: 1 });
+    (prisma.matchRequest.updateMany as any).mockImplementation((args: any) =>
+      Promise.resolve({ count: args.where.id.in.length }),
+    );
     (prisma.cohort.create as any)
       .mockResolvedValueOnce({ id: 'cohort-x', status: 'PENDING_PAYMENT', sessionsPerWeek: 3 })
       .mockResolvedValueOnce({ id: 'cohort-y', status: 'PENDING_PAYMENT', sessionsPerWeek: 1 });
@@ -368,7 +387,9 @@ describe.skip('manuallyAssignTutor / manuallyAssembleGroup', () => {
           studentId: randomUUID(),
         })),
       );
-    (prisma.matchRequest.updateMany as any).mockResolvedValue({ count: 1 });
+    (prisma.matchRequest.updateMany as any).mockImplementation((args: any) =>
+      Promise.resolve({ count: args.where.id.in.length }),
+    );
     (prisma.cohort.create as any)
       .mockResolvedValueOnce({ id: 'cohort-x', status: 'PENDING_PAYMENT', sessionsPerWeek: 3 })
       .mockResolvedValueOnce({ id: 'cohort-y', status: 'PENDING_PAYMENT', sessionsPerWeek: 1 });
@@ -413,7 +434,9 @@ describe.skip('manuallyAssignTutor / manuallyAssembleGroup', () => {
           studentId: randomUUID(),
         })),
       );
-    (prisma.matchRequest.updateMany as any).mockResolvedValue({ count: 1 });
+    (prisma.matchRequest.updateMany as any).mockImplementation((args: any) =>
+      Promise.resolve({ count: args.where.id.in.length }),
+    );
     (prisma.cohort.create as any)
       .mockResolvedValueOnce({ id: 'cohort-x', status: 'PENDING_PAYMENT' })
       .mockResolvedValueOnce({ id: 'cohort-y', status: 'PENDING_PAYMENT' });
@@ -437,7 +460,9 @@ describe.skip('manuallyAssignTutor / manuallyAssembleGroup', () => {
         studentId: randomUUID(),
       },
     ]);
-    (prisma.matchRequest.updateMany as any).mockResolvedValue({ count: 1 });
+    (prisma.matchRequest.updateMany as any).mockImplementation((args: any) =>
+      Promise.resolve({ count: args.where.id.in.length }),
+    );
     (prisma.cohort.create as any).mockResolvedValue({
       id: 'new-cohort',
       status: 'PENDING_PAYMENT',

@@ -18,7 +18,7 @@ import {
   selectTutorSchema,
 } from '../../src/schemas/matching.schema.js';
 
-describe.skip('searchTutorsQuerySchema', () => {
+describe('searchTutorsQuerySchema', () => {
   it('requires subjectId and grade', () => {
     const result = searchTutorsQuerySchema.safeParse({ query: {} });
 
@@ -93,7 +93,7 @@ describe.skip('searchTutorsQuerySchema', () => {
   });
 });
 
-describe.skip('selectTutorSchema', () => {
+describe('selectTutorSchema', () => {
   it('requires tutorId', () => {
     const result = selectTutorSchema.safeParse({ body: {} });
 
@@ -121,7 +121,7 @@ describe.skip('selectTutorSchema', () => {
   });
 });
 
-describe.skip('noExactMatchSchema', () => {
+describe('noExactMatchSchema', () => {
   it('accepts an empty body (student self case) — studentId optional, defaults to caller', () => {
     const result = noExactMatchSchema.safeParse({ body: {} });
 

@@ -23,7 +23,7 @@ import app from '../../src/app.js';
 
 const authHeader = { Authorization: 'Bearer valid.jwt.token' };
 
-describe.skip('formatSwitch.routes.ts', () => {
+describe('formatSwitch.routes.ts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (formatSwitchService.requestSwitch as any).mockResolvedValue({
