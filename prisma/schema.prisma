@@ -156,6 +156,8 @@ model User {
   revokedRelationships ParentStudentRelationship[]
   cohorts              Cohort[]
   pricingConfigs       PricingConfig[]
+  messageThreads       MessageThread[]
+  messages             Message[]
 }
 
 model StudentProfile {
@@ -424,6 +426,7 @@ model Cohort {
   memberships     CohortMembership[]
   adminApprovedBy User?              @relation(fields: [adminApprovedById], references: [id])
   matchRequests   MatchRequest[]
+  messageThread   MessageThread?
 }
 
 model CohortMembership {
@@ -578,4 +581,37 @@ model PricingConfig {
   updatedAt              DateTime       @updatedAt
 
   createdBy User @relation(fields: [createdById], references: [id])
+}
+
+enum ThreadStatus {
+  ACTIVE
+  ARCHIVED
+  CLOSED_BY_ADMIN
+}
+
+model MessageThread {
+  id         String       @id @default(uuid())
+  cohortId   String       @unique
+  status     ThreadStatus @default(ACTIVE)
+  archivedAt DateTime?
+  closedById String?
+  closedAt   DateTime?
+  createdAt  DateTime     @default(now())
+
+  cohort   Cohort    @relation(fields: [cohortId], references: [id])
+  closedBy User?     @relation(fields: [closedById], references: [id])
+  messages Message[]
+}
+
+model Message {
+  id        String   @id @default(uuid())
+  threadId  String
+  senderId  String
+  body      String
+  createdAt DateTime @default(now())
+
+  thread MessageThread @relation(fields: [threadId], references: [id])
+  sender User          @relation(fields: [senderId], references: [id])
+
+  @@index([threadId, createdAt])
 }

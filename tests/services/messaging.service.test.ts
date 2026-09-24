@@ -97,7 +97,7 @@ function resetMocks() {
   vi.clearAllMocks();
 }
 
-describe.skip('getThreadForCohort', () => {
+describe('getThreadForCohort', () => {
   beforeEach(resetMocks);
 
   it('1-to-1 cohort returns a private pair thread', async () => {
@@ -182,7 +182,7 @@ describe.skip('getThreadForCohort', () => {
   });
 });
 
-describe.skip('listMessages', () => {
+describe('listMessages', () => {
   beforeEach(resetMocks);
 
   it('returns paginated chronological history', async () => {
@@ -269,7 +269,7 @@ describe.skip('listMessages', () => {
   });
 });
 
-describe.skip('sendMessage', () => {
+describe('sendMessage', () => {
   beforeEach(resetMocks);
 
   it('creates the message and notifies every other active participant — group cohort notifies exactly 3, never for the sender', async () => {

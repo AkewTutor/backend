@@ -35,7 +35,7 @@ function resetMocks() {
   vi.clearAllMocks();
 }
 
-describe.skip('viewThreadForDispute', () => {
+describe('viewThreadForDispute', () => {
   beforeEach(resetMocks);
 
   it('returns full thread + paginated messages for any thread, no membership restriction applied', async () => {
@@ -66,7 +66,7 @@ describe.skip('viewThreadForDispute', () => {
   });
 });
 
-describe.skip('closeThread', () => {
+describe('closeThread', () => {
   beforeEach(resetMocks);
 
   it('closes a thread', async () => {

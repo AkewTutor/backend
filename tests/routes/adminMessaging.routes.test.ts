@@ -31,7 +31,7 @@ import app from '../../src/app.js';
 
 const threadId = 'thread-1';
 
-describe.skip('adminMessaging.routes.ts', () => {
+describe('adminMessaging.routes.ts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (adminMessagingService.viewThreadForDispute as any).mockResolvedValue({

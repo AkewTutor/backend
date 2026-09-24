@@ -28,9 +28,9 @@ import * as messagingService from '../../src/services/messaging.service.js';
 import app from '../../src/app.js';
 
 const authHeader = { Authorization: 'Bearer valid.token.here' };
-const cohortId = 'cohort-1';
+const cohortId = '11111111-1111-4111-8111-111111111111';
 
-describe.skip('messaging.routes.ts', () => {
+describe('messaging.routes.ts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (messagingService.getThreadForCohort as any).mockResolvedValue({

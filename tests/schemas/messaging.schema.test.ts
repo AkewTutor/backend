@@ -16,7 +16,7 @@ import { sendMessageSchema } from '../../src/schemas/messaging.schema.js';
 
 const validCohortId = '3fa85f64-5717-4562-b3fc-2c963f66afa6';
 
-describe.skip('sendMessageSchema', () => {
+describe('sendMessageSchema', () => {
   it('rejects an empty body', () => {
     const result = sendMessageSchema.safeParse({
       params: { cohortId: validCohortId },
