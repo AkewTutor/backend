@@ -27,7 +27,7 @@ vi.mock('../../src/utils/jwt.js', () => ({
 import * as recordingService from '../../src/services/recording.service.js';
 import app from '../../src/app.js';
 
-describe.skip('recording.routes.ts', () => {
+describe('recording.routes.ts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (recordingService.uploadRecording as any).mockResolvedValue({

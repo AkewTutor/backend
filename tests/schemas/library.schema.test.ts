@@ -11,7 +11,7 @@ import { uploadMaterialSchema } from '../../src/schemas/library.schema.js';
 
 const validCohortId = '11111111-1111-4111-8111-111111111111';
 
-describe.skip('uploadMaterialSchema', () => {
+describe('uploadMaterialSchema', () => {
   it('requires a valid fileType enum — VIDEO is rejected, only PDF/NOTE/BOOK allowed', () => {
     const result = uploadMaterialSchema.safeParse({
       body: { cohortId: validCohortId, title: 'Notes', fileType: 'VIDEO' },

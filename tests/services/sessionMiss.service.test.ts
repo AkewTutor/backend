@@ -47,7 +47,7 @@ function resetMocks() {
   vi.clearAllMocks();
 }
 
-describe.skip('recordTutorCausedMiss', () => {
+describe('recordTutorCausedMiss', () => {
   beforeEach(resetMocks);
 
   it('records the miss and queues a free make-up — makeupDeadline = now + 7 days', async () => {
@@ -151,7 +151,7 @@ describe.skip('recordTutorCausedMiss', () => {
   });
 });
 
-describe.skip('recordStudentCausedMiss', () => {
+describe('recordStudentCausedMiss', () => {
   beforeEach(resetMocks);
 
   it('records the miss with no make-up — session still counts as delivered against the billed month', async () => {
@@ -204,7 +204,7 @@ describe.skip('recordStudentCausedMiss', () => {
   });
 });
 
-describe.skip('checkTutorEscalation', () => {
+describe('checkTutorEscalation', () => {
   beforeEach(resetMocks);
 
   it('below threshold — 1 tutor-caused miss in the last 30 days resolves false', async () => {

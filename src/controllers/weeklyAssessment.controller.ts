@@ -1,17 +1,27 @@
-// STUB: auto-generated placeholder to satisfy TypeScript module resolution.
-// TODO: implement real logic.
-import type { Request, Response, NextFunction } from 'express';
-import asyncHandler from '../utils/asyncHandler.js';
-import ApiError from '../utils/ApiError.js';
+import { Request, Response, NextFunction } from 'express';
+import { SuccessResponse } from '../utils/ApiResponse.js';
+import { HTTP_STATUS } from '../constants/index.js';
+import * as assessmentService from '../services/weeklyAssessment.service.js';
 
-export const listForMembership = asyncHandler(
-  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    throw new ApiError(501, 'listForMembership not implemented');
-  },
-);
+export const submit = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id: callerId } = (req as any).user;
+    const result = await assessmentService.submitAssessment(callerId, req.body);
+    res
+      .status(HTTP_STATUS.CREATED)
+      .json(new SuccessResponse(HTTP_STATUS.CREATED, 'Created', result));
+  } catch (error) {
+    next(error);
+  }
+};
 
-export const submit = asyncHandler(
-  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    throw new ApiError(501, 'submit not implemented');
-  },
-);
+export const listForMembership = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id: callerId } = (req as any).user;
+    const membershipId = req.params.id as string;
+    const result = await assessmentService.getAssessmentsForStudent(callerId, membershipId);
+    res.status(HTTP_STATUS.OK).json(new SuccessResponse(HTTP_STATUS.OK, 'OK', result));
+  } catch (error) {
+    next(error);
+  }
+};

@@ -44,7 +44,7 @@ function resetMocks() {
   (storageUpload as any).mockResolvedValue({ storageKey: 'library/2026/09/notes.pdf' });
 }
 
-describe.skip('uploadMaterial', () => {
+describe('uploadMaterial', () => {
   beforeEach(resetMocks);
 
   it('assigned tutor uploads successfully', async () => {
@@ -85,7 +85,7 @@ describe.skip('uploadMaterial', () => {
   });
 });
 
-describe.skip('listCohortMaterials', () => {
+describe('listCohortMaterials', () => {
   beforeEach(resetMocks);
 
   it('a member retrieves cohort materials', async () => {
@@ -116,7 +116,7 @@ describe.skip('listCohortMaterials', () => {
   });
 });
 
-describe.skip('adminManageLibrary', () => {
+describe('adminManageLibrary', () => {
   beforeEach(resetMocks);
 
   it("admin edits a material's title", async () => {

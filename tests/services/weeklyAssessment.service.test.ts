@@ -32,7 +32,7 @@ function resetMocks() {
   vi.clearAllMocks();
 }
 
-describe.skip('submitAssessment', () => {
+describe('submitAssessment', () => {
   beforeEach(resetMocks);
 
   it('a tutor submits a new weekly assessment', async () => {
@@ -100,7 +100,7 @@ describe.skip('submitAssessment', () => {
   });
 });
 
-describe.skip('getAssessmentsForStudent', () => {
+describe('getAssessmentsForStudent', () => {
   beforeEach(resetMocks);
 
   it('a party to the membership (student/parent/tutor) retrieves assessments', async () => {

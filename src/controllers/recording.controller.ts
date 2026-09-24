@@ -1,29 +1,55 @@
-// STUB: auto-generated placeholder to satisfy TypeScript module resolution.
-// TODO: implement real logic.
-import type { Request, Response, NextFunction } from 'express';
-import asyncHandler from '../utils/asyncHandler.js';
+import { Request, Response, NextFunction } from 'express';
+import { SuccessResponse } from '../utils/ApiResponse.js';
+import { HTTP_STATUS } from '../constants/index.js';
+import * as recordingService from '../services/recording.service.js';
 import ApiError from '../utils/ApiError.js';
 
-export const getMyRecordings = asyncHandler(
-  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    throw new ApiError(501, 'getMyRecordings not implemented');
-  },
-);
+export const upload = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id: tutorId } = (req as any).user;
+    const { sessionId } = req.body;
+    const file = req.file;
+    if (!file) {
+      throw new ApiError(HTTP_STATUS.BAD_REQUEST, 'File is required');
+    }
 
-export const getSignedUrl = asyncHandler(
-  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    throw new ApiError(501, 'getSignedUrl not implemented');
-  },
-);
+    const result = await recordingService.uploadRecording(tutorId, sessionId, file.buffer);
+    res
+      .status(HTTP_STATUS.CREATED)
+      .json(new SuccessResponse(HTTP_STATUS.CREATED, 'Created', result));
+  } catch (error) {
+    next(error);
+  }
+};
 
-export const keepPermanently = asyncHandler(
-  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    throw new ApiError(501, 'keepPermanently not implemented');
-  },
-);
+export const getMyRecordings = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = (req as any).user;
+    const result = await recordingService.getMyRecordings(id, req.query);
+    res.status(HTTP_STATUS.OK).json(new SuccessResponse(HTTP_STATUS.OK, 'OK', result));
+  } catch (error) {
+    next(error);
+  }
+};
 
-export const upload = asyncHandler(
-  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    throw new ApiError(501, 'upload not implemented');
-  },
-);
+export const getSignedUrl = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = (req as any).user;
+    const recordingId = req.params.recordingId as string;
+    const result = await recordingService.getSignedUrl(id, recordingId);
+    res.status(HTTP_STATUS.OK).json(new SuccessResponse(HTTP_STATUS.OK, 'OK', result));
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const keepPermanently = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = (req as any).user;
+    const recordingId = req.params.recordingId as string;
+    const result = await recordingService.keepPermanently(id, recordingId);
+    res.status(HTTP_STATUS.OK).json(new SuccessResponse(HTTP_STATUS.OK, 'OK', result));
+  } catch (error) {
+    next(error);
+  }
+};

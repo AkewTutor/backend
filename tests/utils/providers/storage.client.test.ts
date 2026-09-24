@@ -13,13 +13,21 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const putObjectMock = vi.fn();
-const getSignedUrlMock = vi.fn();
+const { putObjectMock, getSignedUrlMock } = vi.hoisted(() => ({
+  putObjectMock: vi.fn(),
+  getSignedUrlMock: vi.fn(),
+}));
 
 vi.mock('@aws-sdk/client-s3', () => ({
-  S3Client: vi.fn().mockImplementation(() => ({ send: putObjectMock })),
-  PutObjectCommand: vi.fn().mockImplementation((input) => ({ input })),
-  GetObjectCommand: vi.fn().mockImplementation((input) => ({ input })),
+  S3Client: vi.fn().mockImplementation(function () {
+    return { send: putObjectMock };
+  }),
+  PutObjectCommand: vi.fn().mockImplementation(function (input) {
+    return { input };
+  }),
+  GetObjectCommand: vi.fn().mockImplementation(function (input) {
+    return { input };
+  }),
 }));
 
 vi.mock('@aws-sdk/s3-request-presigner', () => ({
@@ -32,7 +40,7 @@ function resetMocks() {
   vi.clearAllMocks();
 }
 
-describe.skip('upload', () => {
+describe('upload', () => {
   beforeEach(resetMocks);
 
   it('resolves { storageKey } on a successful upload', async () => {
@@ -64,7 +72,7 @@ describe.skip('upload', () => {
   });
 });
 
-describe.skip('getSignedUrl', () => {
+describe('getSignedUrl', () => {
   beforeEach(resetMocks);
 
   it('resolves a URL string, calling the SDK presigner with the requested expiry', async () => {

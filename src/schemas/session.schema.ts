@@ -3,7 +3,7 @@
 import { z } from 'zod';
 
 export const provideJitsiLinkSchema = z.object({
-  body: z.record(z.string(), z.unknown()).optional(),
-  params: z.record(z.string(), z.unknown()).optional(),
-  query: z.record(z.string(), z.unknown()).optional(),
+  body: z.object({
+    jitsiLinkUrl: z.string().url(),
+  }),
 });

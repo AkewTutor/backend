@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest';
 
 import { requestRescheduleSchema } from '../../src/schemas/reschedule.schema.js';
 
-describe.skip('requestRescheduleSchema', () => {
+describe('requestRescheduleSchema', () => {
   it('requires a valid uuid sessionId and an ISO datetime requestedNewStart — both fail together', () => {
     const result = requestRescheduleSchema.safeParse({
       body: { sessionId: 'x', requestedNewStart: 'not-a-date' },

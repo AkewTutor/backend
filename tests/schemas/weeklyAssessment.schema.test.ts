@@ -11,7 +11,7 @@ import { submitAssessmentSchema } from '../../src/schemas/weeklyAssessment.schem
 
 const validMembershipId = '11111111-1111-4111-8111-111111111111';
 
-describe.skip('submitAssessmentSchema', () => {
+describe('submitAssessmentSchema', () => {
   it('requires tutorFeedback — missing it fails even with the rest of the body valid', () => {
     const result = submitAssessmentSchema.safeParse({
       body: { cohortMembershipId: validMembershipId, weekStartDate: '2026-06-01' },

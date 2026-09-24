@@ -12,7 +12,7 @@ import { describe, expect, it } from 'vitest';
 
 import { provideJitsiLinkSchema } from '../../src/schemas/session.schema.js';
 
-describe.skip('provideJitsiLinkSchema', () => {
+describe('provideJitsiLinkSchema', () => {
   it('requires a valid URL — a non-URL string fails', () => {
     const result = provideJitsiLinkSchema.safeParse({ body: { jitsiLinkUrl: 'not-a-url' } });
 

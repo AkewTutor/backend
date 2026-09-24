@@ -35,7 +35,7 @@ function resetMocks() {
   vi.clearAllMocks();
 }
 
-describe.skip('requestReschedule', () => {
+describe('requestReschedule', () => {
   beforeEach(() => {
     resetMocks();
     vi.useFakeTimers();
@@ -267,7 +267,7 @@ describe.skip('requestReschedule', () => {
   });
 });
 
-describe.skip('enforceMonthlyCap', () => {
+describe('enforceMonthlyCap', () => {
   beforeEach(resetMocks);
 
   it('resolves { freeReschedulesUsedThisMonth: 1 } and does not throw when under the cap', async () => {

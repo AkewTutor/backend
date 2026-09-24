@@ -28,7 +28,7 @@ vi.mock('../../src/utils/jwt.js', () => ({
 import * as libraryService from '../../src/services/library.service.js';
 import app from '../../src/app.js';
 
-describe.skip('library.routes.ts', () => {
+describe('library.routes.ts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (libraryService.uploadMaterial as any).mockResolvedValue({

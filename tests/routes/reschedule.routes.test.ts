@@ -24,12 +24,12 @@ import * as rescheduleService from '../../src/services/reschedule.service.js';
 import app from '../../src/app.js';
 import ApiError from '../../src/utils/ApiError.js';
 
-describe.skip('reschedule.routes.ts', () => {
+describe('reschedule.routes.ts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (rescheduleService.requestReschedule as any).mockResolvedValue({
       id: 'reschedule-1',
-      sessionId: 'session-1',
+      sessionId: '11111111-1111-4111-8111-111111111111',
       requestedNewStart: '2026-09-09T16:00:00Z',
       noticeHours: '18.0',
       classification: 'FREE_RESCHEDULE',
@@ -40,7 +40,10 @@ describe.skip('reschedule.routes.ts', () => {
   it('route requires auth — 401 with no Authorization header', async () => {
     const res = await request(app)
       .post('/api/v1/reschedule')
-      .send({ sessionId: 'session-1', requestedNewStart: '2026-09-09T16:00:00Z' });
+      .send({
+        sessionId: '11111111-1111-4111-8111-111111111111',
+        requestedNewStart: '2026-09-09T16:00:00Z',
+      });
 
     expect(res.status).toBe(401);
   });
@@ -49,7 +52,7 @@ describe.skip('reschedule.routes.ts', () => {
     const res = await request(app)
       .post('/api/v1/reschedule')
       .set('Authorization', 'Bearer student-token')
-      .send({ sessionId: 'session-1' });
+      .send({ sessionId: '11111111-1111-4111-8111-111111111111' });
 
     expect(res.status).toBe(400);
     expect(rescheduleService.requestReschedule).not.toHaveBeenCalled();
@@ -63,7 +66,10 @@ describe.skip('reschedule.routes.ts', () => {
     const res = await request(app)
       .post('/api/v1/reschedule')
       .set('Authorization', 'Bearer unrelated-token')
-      .send({ sessionId: 'session-1', requestedNewStart: '2026-09-09T16:00:00Z' });
+      .send({
+        sessionId: '11111111-1111-4111-8111-111111111111',
+        requestedNewStart: '2026-09-09T16:00:00Z',
+      });
 
     expect(res.status).toBe(403);
   });
@@ -72,7 +78,10 @@ describe.skip('reschedule.routes.ts', () => {
     const res = await request(app)
       .post('/api/v1/reschedule')
       .set('Authorization', 'Bearer student-token')
-      .send({ sessionId: 'session-1', requestedNewStart: '2026-09-09T16:00:00Z' });
+      .send({
+        sessionId: '11111111-1111-4111-8111-111111111111',
+        requestedNewStart: '2026-09-09T16:00:00Z',
+      });
 
     expect(res.status).toBe(200);
     expect(rescheduleService.requestReschedule).toHaveBeenCalled();

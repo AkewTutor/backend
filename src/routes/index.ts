@@ -16,6 +16,13 @@ import matchingRouter from './matching.routes.js';
 import cohortRouter from './cohort.routes.js';
 import adminMatchingRouter from './adminMatching.routes.js';
 import formatSwitchRouter from './formatSwitch.routes.js';
+import sessionRouter from './session.routes.js';
+import rescheduleRouter from './reschedule.routes.js';
+import weeklyAssessmentRouter from './weeklyAssessment.routes.js';
+import recordingConsentRouter from './recordingConsent.routes.js';
+import sessionMissRouter from './sessionMiss.routes.js';
+import recordingRouter from './recording.routes.js';
+import { libraryRouter, adminLibraryRouter } from './library.routes.js';
 
 const router = Router();
 
@@ -40,5 +47,15 @@ router.use('/matching', matchingRouter);
 router.use('/cohorts', cohortRouter);
 router.use('/admin/matching', adminMatchingRouter);
 router.use('/format-switch', formatSwitchRouter);
+
+// ── class-delivery-library ─────────────────────────────────────────
+router.use('/sessions', sessionRouter);
+router.use('/reschedule', rescheduleRouter);
+router.use('/assessments', weeklyAssessmentRouter);
+router.use('/recording-consent', recordingConsentRouter);
+router.use('/session-miss', sessionMissRouter);
+router.use('/recordings', recordingRouter);
+router.use('/library', libraryRouter);
+router.use('/admin/library', adminLibraryRouter);
 
 export default router;

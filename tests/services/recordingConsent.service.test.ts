@@ -32,7 +32,7 @@ function resetMocks() {
   vi.clearAllMocks();
 }
 
-describe.skip('getConsentStatus', () => {
+describe('getConsentStatus', () => {
   beforeEach(resetMocks);
 
   it('resolves both timestamps null and consentComplete: false when neither side has acknowledged', async () => {
@@ -76,7 +76,7 @@ describe.skip('getConsentStatus', () => {
   });
 });
 
-describe.skip('acknowledgeAsStudentOrParent / acknowledgeAsTutor', () => {
+describe('acknowledgeAsStudentOrParent / acknowledgeAsTutor', () => {
   beforeEach(resetMocks);
 
   it('first acknowledgment creates/upserts the row with studentOrParentAcknowledgedAt set, tutor side still pending', async () => {

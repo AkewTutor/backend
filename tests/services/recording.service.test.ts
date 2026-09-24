@@ -73,7 +73,7 @@ function resetMocks() {
   (clientGetSignedUrl as any).mockResolvedValue('https://r2.akewtutor.com/signed?sig=abc');
 }
 
-describe.skip('uploadRecording', () => {
+describe('uploadRecording', () => {
   beforeEach(resetMocks);
 
   it('succeeds for a fully-consented 1-to-1 pairing — expiresAt is upload time + 90 days, keepPermanently false', async () => {
@@ -212,7 +212,7 @@ describe.skip('uploadRecording', () => {
   });
 });
 
-describe.skip('getSignedUrl (recording playback)', () => {
+describe('getSignedUrl (recording playback)', () => {
   beforeEach(resetMocks);
 
   it('a cohort member retrieves their own recording — resolves { signedUrl, expiresIn: 900 }', async () => {
@@ -345,7 +345,7 @@ describe.skip('getSignedUrl (recording playback)', () => {
   });
 });
 
-describe.skip('keepPermanently', () => {
+describe('keepPermanently', () => {
   beforeEach(resetMocks);
 
   it('owner marks a recording to keep permanently', async () => {
@@ -379,7 +379,7 @@ describe.skip('keepPermanently', () => {
   });
 });
 
-describe.skip('flagMissing / escalateMissing', () => {
+describe('flagMissing / escalateMissing', () => {
   beforeEach(resetMocks);
 
   it('flags MISSING at 2h with no recording', async () => {

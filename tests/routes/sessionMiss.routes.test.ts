@@ -26,7 +26,7 @@ vi.mock('../../src/utils/jwt.js', () => ({
 import * as sessionMissService from '../../src/services/sessionMiss.service.js';
 import app from '../../src/app.js';
 
-describe.skip('sessionMiss.routes.ts', () => {
+describe('sessionMiss.routes.ts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (sessionMissService.listMisses as any).mockResolvedValue({

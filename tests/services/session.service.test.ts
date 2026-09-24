@@ -63,7 +63,7 @@ function resetMocks() {
   (assertAccountStatusAllowsAccess as any).mockResolvedValue(undefined);
 }
 
-describe.skip('generateSessionsForCohort', () => {
+describe('generateSessionsForCohort', () => {
   beforeEach(resetMocks);
 
   it('sets Cohort.sessionsPerWeek from the count of distinct matched recurring AvailabilitySlots', async () => {
@@ -221,7 +221,7 @@ describe.skip('generateSessionsForCohort', () => {
   });
 });
 
-describe.skip('provideJitsiLink', () => {
+describe('provideJitsiLink', () => {
   beforeEach(() => {
     resetMocks();
     vi.useFakeTimers();
@@ -330,7 +330,7 @@ describe.skip('provideJitsiLink', () => {
   });
 });
 
-describe.skip('assertSessionAccessAllowed', () => {
+describe('assertSessionAccessAllowed', () => {
   beforeEach(resetMocks);
 
   it('a Student caller with an ACTIVE account and a real membership resolves the ScheduledSession row', async () => {
@@ -439,7 +439,7 @@ describe.skip('assertSessionAccessAllowed', () => {
   });
 });
 
-describe.skip('markCompleted', () => {
+describe('markCompleted', () => {
   beforeEach(resetMocks);
 
   it('marks a SCHEDULED session completed', async () => {
@@ -475,7 +475,7 @@ describe.skip('markCompleted', () => {
   );
 });
 
-describe.skip('listMySessions / getSession (co-located reads)', () => {
+describe('listMySessions / getSession (co-located reads)', () => {
   beforeEach(resetMocks);
 
   it('no sessions yet resolves { sessions: [] }, not an error', async () => {

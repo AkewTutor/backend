@@ -29,7 +29,7 @@ import app from '../../src/app.js';
 const tutorId = '11111111-1111-4111-8111-111111111111';
 const studentId = '22222222-2222-4222-8222-222222222222';
 
-describe.skip('recordingConsent.routes.ts', () => {
+describe('recordingConsent.routes.ts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (recordingConsentService.getConsentStatus as any).mockResolvedValue({

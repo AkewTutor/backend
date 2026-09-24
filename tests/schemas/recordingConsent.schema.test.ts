@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest';
 
 import { acknowledgeConsentSchema } from '../../src/schemas/recordingConsent.schema.js';
 
-describe.skip('acknowledgeConsentSchema', () => {
+describe('acknowledgeConsentSchema', () => {
   it('requires both tutorId and studentId as uuids — a non-uuid tutorId with no studentId fails', () => {
     const result = acknowledgeConsentSchema.safeParse({ body: { tutorId: 'x' } });
 

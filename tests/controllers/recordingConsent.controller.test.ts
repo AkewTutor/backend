@@ -27,7 +27,7 @@ function mockRes() {
   return res as Response & { status: ReturnType<typeof vi.fn>; json: ReturnType<typeof vi.fn> };
 }
 
-describe.skip('recordingConsent.controller.ts', () => {
+describe('recordingConsent.controller.ts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });

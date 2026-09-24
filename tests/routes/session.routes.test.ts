@@ -28,7 +28,7 @@ import * as sessionService from '../../src/services/session.service.js';
 import app from '../../src/app.js';
 import ApiError from '../../src/utils/ApiError.js';
 
-describe.skip('session.routes.ts', () => {
+describe('session.routes.ts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (sessionService.listMySessions as any).mockResolvedValue({
