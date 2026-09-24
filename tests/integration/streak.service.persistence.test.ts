@@ -46,7 +46,7 @@ async function seedRealStudentWithStreak(overrides: Record<string, unknown> = {}
   return student;
 }
 
-describe.skip('streak.service.ts — Integration (persistence)', () => {
+describe('streak.service.ts — Integration (persistence)', () => {
   beforeAll(async () => {
     await assertTestDbReachable();
   });

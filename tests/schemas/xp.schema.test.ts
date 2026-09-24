@@ -19,7 +19,7 @@ function parse(body: Record<string, unknown>) {
   return adjustXPSchema.safeParse({ body, params: { studentId: 'student-1' }, query: {} });
 }
 
-describe.skip('adjustXPSchema', () => {
+describe('adjustXPSchema', () => {
   it('accepts a valid positive amount with a note', () => {
     const result = parse({ amount: 10, note: 'Goodwill adjustment' });
     expect(result.success).toBe(true);

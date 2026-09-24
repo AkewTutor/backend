@@ -58,7 +58,7 @@ function mockExistingStreak(overrides: Record<string, unknown>) {
   });
 }
 
-describe.skip('updateStreakOnActivity', () => {
+describe('updateStreakOnActivity', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('a consecutive day increments the streak', async () => {
@@ -197,7 +197,7 @@ describe.skip('updateStreakOnActivity', () => {
   });
 });
 
-describe.skip('resetStreakOnGap', () => {
+describe('resetStreakOnGap', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('resets currentStreakDays without touching badges/XP', async () => {

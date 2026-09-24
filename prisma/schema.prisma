@@ -148,16 +148,19 @@ model User {
   // explicitly named; its inverse lives here.
   verifiedTutors TutorProfile[] @relation("TutorVerifiedBy")
 
-  refreshTokens        RefreshToken[]
-  notifications        Notification[]
-  publishedPolicies    PolicyDocument[]
-  auditLogs            AuditLog[]
-  announcements        Announcement[]
-  revokedRelationships ParentStudentRelationship[]
-  cohorts              Cohort[]
-  pricingConfigs       PricingConfig[]
-  messageThreads       MessageThread[]
-  messages             Message[]
+  refreshTokens                 RefreshToken[]
+  notifications                 Notification[]
+  publishedPolicies             PolicyDocument[]
+  auditLogs                     AuditLog[]
+  announcements                 Announcement[]
+  revokedRelationships          ParentStudentRelationship[]
+  cohorts                       Cohort[]
+  pricingConfigs                PricingConfig[]
+  rescheduleRequestsRequested   RescheduleRequest[]
+  recordingConsentsAcknowledged RecordingConsent[]          @relation("ConsentAcknowledgedBy")
+  messageThreads                MessageThread[]
+  messages                      Message[]
+  challenges                    Challenge[]
 }
 
 model StudentProfile {
@@ -187,6 +190,11 @@ model StudentProfile {
   matchRequests         MatchRequest[]
   tutorExclusions       TutorExclusion[]
   formatSwitchRequests  FormatSwitchRequest[]
+  xpledgerEntries       XPLedgerEntry[]
+  studentBadges         StudentBadge[]
+  streak                Streak?
+  challengeProgresses   ChallengeProgress[]
+  recordingConsents     RecordingConsent[]
 }
 
 model ParentProfile {
@@ -224,6 +232,10 @@ model TutorProfile {
   availabilitySlots AvailabilitySlot[]
   cohorts           Cohort[]
   tutorExclusions   TutorExclusion[]
+  tutorBadges       TutorBadge[]
+  recordingConsents RecordingConsent[]
+  libraryMaterials  LibraryMaterial[]
+  weeklyAssessments WeeklyAssessment[]
 }
 
 model RefreshToken {
@@ -421,12 +433,14 @@ model Cohort {
   createdAt                     DateTime         @default(now())
   updatedAt                     DateTime         @updatedAt
 
-  tutor           TutorProfile       @relation(fields: [tutorId], references: [id])
-  subject         Subject            @relation(fields: [subjectId], references: [id])
-  memberships     CohortMembership[]
-  adminApprovedBy User?              @relation(fields: [adminApprovedById], references: [id])
-  matchRequests   MatchRequest[]
-  messageThread   MessageThread?
+  tutor             TutorProfile       @relation(fields: [tutorId], references: [id])
+  subject           Subject            @relation(fields: [subjectId], references: [id])
+  memberships       CohortMembership[]
+  adminApprovedBy   User?              @relation(fields: [adminApprovedById], references: [id])
+  matchRequests     MatchRequest[]
+  scheduledSessions ScheduledSession[]
+  libraryMaterials  LibraryMaterial[]
+  messageThread     MessageThread?
 }
 
 model CohortMembership {
@@ -441,9 +455,10 @@ model CohortMembership {
   createdAt              DateTime             @default(now())
   updatedAt              DateTime             @updatedAt
 
-  cohort         Cohort                @relation(fields: [cohortId], references: [id])
-  student        StudentProfile        @relation(fields: [studentId], references: [id])
-  formatSwitches FormatSwitchRequest[]
+  cohort            Cohort                @relation(fields: [cohortId], references: [id])
+  student           StudentProfile        @relation(fields: [studentId], references: [id])
+  formatSwitches    FormatSwitchRequest[]
+  weeklyAssessments WeeklyAssessment[]
 }
 
 enum PaymentStatus {
@@ -467,23 +482,6 @@ model Payment {
   // We are not adding the strict relations for Payment in the stub
   // since it connects to CohortMembership which might require inverse relations.
   // We'll leave it as flat fields for the stub so Prisma validates the shape.
-}
-
-model XPLedgerEntry {
-  id        String   @id @default(uuid())
-  studentId String
-  amount    Int
-  reason    String   @default("LESSON_ATTENDED")
-  note      String?
-  createdAt DateTime @default(now())
-}
-
-model Streak {
-  id                String    @id @default(uuid())
-  studentId         String
-  currentStreakDays Int       @default(0)
-  longestStreakDays Int       @default(0)
-  lastActivityDate  DateTime?
 }
 
 // ---- PHASE 3: MATCHING & COHORTS ----
@@ -583,6 +581,153 @@ model PricingConfig {
   createdBy User @relation(fields: [createdById], references: [id])
 }
 
+// ---- PHASE 4: CLASS DELIVERY & LIBRARY ----
+
+enum SessionStatus {
+  SCHEDULED
+  COMPLETED
+  MISSED
+  RESCHEDULED
+  PAYMENT_PAUSE_RESCHEDULED
+  CANCELLED
+}
+
+enum RecordingUploadStatus {
+  PENDING
+  UPLOADED
+  MISSING
+  ESCALATED
+}
+
+enum RescheduleClassification {
+  FREE_RESCHEDULE
+  SAME_DAY_MISS
+}
+
+enum MissCause {
+  TUTOR
+  STUDENT
+}
+
+enum MissType {
+  NO_SHOW
+  LATE_CANCELLATION
+  TECHNICAL_FAILURE
+}
+
+enum MaterialFileType {
+  PDF
+  NOTE
+  BOOK
+}
+
+model ScheduledSession {
+  id                 String                @id @default(uuid())
+  cohortId           String
+  scheduledStart     DateTime
+  scheduledEnd       DateTime
+  jitsiLinkUrl       String?
+  jitsiLinkSentAt    DateTime?
+  status             SessionStatus         @default(SCHEDULED)
+  isMakeup           Boolean               @default(false)
+  makeupForSessionId String?
+  recordingStatus    RecordingUploadStatus @default(PENDING)
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+
+  cohort           Cohort             @relation(fields: [cohortId], references: [id])
+  makeupForSession ScheduledSession?  @relation("MakeupSession", fields: [makeupForSessionId], references: [id])
+  makeupSessions   ScheduledSession[] @relation("MakeupSession")
+
+  rescheduleRequests RescheduleRequest[]
+  sessionMiss        SessionMiss?        @relation("MissedSession")
+  recording          Recording?
+}
+
+model RescheduleRequest {
+  id                String                   @id @default(uuid())
+  sessionId         String
+  requestedById     String
+  requestedNewStart DateTime
+  noticeHours       Decimal
+  classification    RescheduleClassification
+  createdAt         DateTime                 @default(now())
+
+  session     ScheduledSession @relation(fields: [sessionId], references: [id])
+  requestedBy User             @relation(fields: [requestedById], references: [id])
+}
+
+model SessionMiss {
+  id              String    @id @default(uuid())
+  sessionId       String    @unique
+  causedBy        MissCause
+  missType        MissType
+  makeupSessionId String?
+  createdAt       DateTime  @default(now())
+
+  session ScheduledSession @relation("MissedSession", fields: [sessionId], references: [id])
+}
+
+model RecordingConsent {
+  id                            String    @id @default(uuid())
+  tutorId                       String
+  studentId                     String
+  tutorAcknowledgedAt           DateTime?
+  studentOrParentAcknowledgedAt DateTime?
+  acknowledgedByUserId          String?
+  createdAt                     DateTime  @default(now())
+
+  tutor          TutorProfile   @relation(fields: [tutorId], references: [id])
+  student        StudentProfile @relation(fields: [studentId], references: [id])
+  acknowledgedBy User?          @relation("ConsentAcknowledgedBy", fields: [acknowledgedByUserId], references: [id])
+
+  @@unique([tutorId, studentId])
+}
+
+model Recording {
+  id              String    @id @default(uuid())
+  sessionId       String    @unique
+  storageKey      String
+  fileSizeBytes   Int
+  encoding        String    @default("720p")
+  createdAt       DateTime  @default(now())
+  expiresAt       DateTime
+  keepPermanently Boolean   @default(false)
+  deletedAt       DateTime?
+
+  session ScheduledSession @relation(fields: [sessionId], references: [id])
+}
+
+model LibraryMaterial {
+  id                String           @id @default(uuid())
+  cohortId          String
+  uploadedByTutorId String
+  title             String
+  fileUrl           String
+  fileType          MaterialFileType
+  createdAt         DateTime         @default(now())
+
+  cohort     Cohort       @relation(fields: [cohortId], references: [id])
+  uploadedBy TutorProfile @relation(fields: [uploadedByTutorId], references: [id])
+}
+
+model WeeklyAssessment {
+  id                 String   @id @default(uuid())
+  cohortMembershipId String
+  weekStartDate      DateTime
+  scoreSummary       String?
+  tutorFeedback      String
+  submittedByTutorId String
+  createdAt          DateTime @default(now())
+
+  cohortMembership CohortMembership @relation(fields: [cohortMembershipId], references: [id])
+  submittedBy      TutorProfile     @relation(fields: [submittedByTutorId], references: [id])
+
+  @@unique([cohortMembershipId, weekStartDate])
+}
+
+// ---- PHASE 5: MESSAGING ----
+
 enum ThreadStatus {
   ACTIVE
   ARCHIVED
@@ -614,4 +759,113 @@ model Message {
   sender User          @relation(fields: [senderId], references: [id])
 
   @@index([threadId, createdAt])
+}
+
+// ---- PHASE 6: GAMIFICATION & ENGAGEMENT ----
+
+enum XPReason {
+  CLASS_ATTENDED
+  ASSESSMENT_COMPLETED
+  STREAK_MILESTONE
+  CHALLENGE_COMPLETED
+  BADGE_AWARDED
+  OTHER
+}
+
+model XPLedgerEntry {
+  id        String   @id @default(uuid())
+  studentId String
+  amount    Int
+  reason    XPReason
+  note      String?
+  createdAt DateTime @default(now())
+
+  student StudentProfile @relation(fields: [studentId], references: [id])
+
+  @@index([studentId, createdAt])
+}
+
+enum BadgeCategory {
+  STUDENT
+  TUTOR
+}
+
+model Badge {
+  id                  String        @id @default(uuid())
+  name                String
+  description         String
+  category            BadgeCategory
+  criteriaDescription String
+  isActive            Boolean       @default(true)
+  createdAt           DateTime      @default(now())
+
+  studentBadges StudentBadge[]
+  tutorBadges   TutorBadge[]
+}
+
+model StudentBadge {
+  id        String   @id @default(uuid())
+  studentId String
+  badgeId   String
+  earnedAt  DateTime @default(now())
+
+  student StudentProfile @relation(fields: [studentId], references: [id])
+  badge   Badge          @relation(fields: [badgeId], references: [id])
+
+  @@unique([studentId, badgeId])
+}
+
+model TutorBadge {
+  id       String   @id @default(uuid())
+  tutorId  String
+  badgeId  String
+  earnedAt DateTime @default(now())
+
+  tutor TutorProfile @relation(fields: [tutorId], references: [id])
+  badge Badge        @relation(fields: [badgeId], references: [id])
+
+  @@unique([tutorId, badgeId])
+}
+
+model Streak {
+  id                String    @id @default(uuid())
+  studentId         String    @unique
+  currentStreakDays Int       @default(0)
+  longestStreakDays Int       @default(0)
+  lastActivityDate  DateTime?
+
+  student StudentProfile @relation(fields: [studentId], references: [id])
+}
+
+enum ChallengePeriod {
+  WEEKLY
+  MONTHLY
+}
+
+model Challenge {
+  id          String          @id @default(uuid())
+  title       String
+  description String
+  period      ChallengePeriod
+  startsAt    DateTime
+  endsAt      DateTime
+  targetValue Int
+  createdById String
+  createdAt   DateTime        @default(now())
+
+  createdBy       User                @relation(fields: [createdById], references: [id])
+  progressEntries ChallengeProgress[]
+}
+
+model ChallengeProgress {
+  id            String    @id @default(uuid())
+  studentId     String
+  challengeId   String
+  progressValue Int       @default(0)
+  completedAt   DateTime?
+
+  student   StudentProfile @relation(fields: [studentId], references: [id])
+  challenge Challenge      @relation(fields: [challengeId], references: [id])
+
+  @@unique([studentId, challengeId])
 }

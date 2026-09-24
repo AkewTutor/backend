@@ -26,7 +26,7 @@ const VALID = {
   targetValue: 3,
 };
 
-describe.skip('createChallengeSchema', () => {
+describe('createChallengeSchema', () => {
   it('requires endsAt after startsAt', () => {
     const result = parse({
       ...VALID,

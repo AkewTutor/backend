@@ -27,7 +27,7 @@ vi.mock('../../src/utils/jwt.js', () => ({
 import * as xpService from '../../src/services/xp.service.js';
 import app from '../../src/app.js';
 
-describe.skip('xp.routes.ts', () => {
+describe('xp.routes.ts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (xpService.getMyProgress as any).mockResolvedValue({

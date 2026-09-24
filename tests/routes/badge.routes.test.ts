@@ -26,7 +26,7 @@ vi.mock('../../src/utils/jwt.js', () => ({
 import * as badgeService from '../../src/services/badge.service.js';
 import app from '../../src/app.js';
 
-describe.skip('badge.routes.ts', () => {
+describe('badge.routes.ts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (badgeService.listMyBadges as any).mockResolvedValue({ badges: [] });

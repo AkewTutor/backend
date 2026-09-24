@@ -36,7 +36,7 @@ const VALID_BODY = {
   targetValue: 3,
 };
 
-describe.skip('challenge.routes.ts', () => {
+describe('challenge.routes.ts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (challengeService.listActiveChallenges as any).mockResolvedValue([]);

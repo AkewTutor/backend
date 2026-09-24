@@ -44,7 +44,7 @@ async function seedRealBadge(overrides: Record<string, unknown> = {}) {
   return (testPrisma as any).badge.create({ data: buildBadge(overrides) });
 }
 
-describe.skip('badge.service.ts — Integration (persistence)', () => {
+describe('badge.service.ts — Integration (persistence)', () => {
   beforeAll(async () => {
     await assertTestDbReachable();
   });

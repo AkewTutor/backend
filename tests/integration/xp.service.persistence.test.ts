@@ -34,7 +34,7 @@ async function seedRealStudent(overrides: Record<string, unknown> = {}) {
   return { user, student };
 }
 
-describe.skip('xp.service.ts — Integration (persistence)', () => {
+describe('xp.service.ts — Integration (persistence)', () => {
   beforeAll(async () => {
     await assertTestDbReachable();
   });
@@ -61,7 +61,7 @@ describe.skip('xp.service.ts — Integration (persistence)', () => {
       const row = result.rankings.find((r: any) => r.xp === 25);
       expect(row).toBeDefined();
 
-      const rowCount = await (testPrisma as any).xpLedgerEntry.count({
+      const rowCount = await (testPrisma as any).xPLedgerEntry.count({
         where: { studentId: student.id },
       });
       expect(rowCount).toBe(3);
@@ -88,7 +88,7 @@ describe.skip('xp.service.ts — Integration (persistence)', () => {
     it('only entries inside the period window are aggregated', async () => {
       const { student } = await seedRealStudent();
 
-      await (testPrisma as any).xpLedgerEntry.create({
+      await (testPrisma as any).xPLedgerEntry.create({
         data: {
           studentId: student.id,
           amount: 20,
@@ -98,7 +98,7 @@ describe.skip('xp.service.ts — Integration (persistence)', () => {
       });
       const tenDaysAgo = new Date();
       tenDaysAgo.setDate(tenDaysAgo.getDate() - 10);
-      await (testPrisma as any).xpLedgerEntry.create({
+      await (testPrisma as any).xPLedgerEntry.create({
         data: {
           studentId: student.id,
           amount: 20,
@@ -124,10 +124,10 @@ describe.skip('xp.service.ts — Integration (persistence)', () => {
         ),
       );
 
-      const rowCount = await (testPrisma as any).xpLedgerEntry.count({
+      const rowCount = await (testPrisma as any).xPLedgerEntry.count({
         where: { studentId: student.id },
       });
-      const sum = await (testPrisma as any).xpLedgerEntry.aggregate({
+      const sum = await (testPrisma as any).xPLedgerEntry.aggregate({
         where: { studentId: student.id },
         _sum: { amount: true },
       });
@@ -149,17 +149,17 @@ describe.skip('xp.service.ts — Integration (persistence)', () => {
         ),
       ]);
 
-      const countA = await (testPrisma as any).xpLedgerEntry.count({
+      const countA = await (testPrisma as any).xPLedgerEntry.count({
         where: { studentId: studentA.id },
       });
-      const sumA = await (testPrisma as any).xpLedgerEntry.aggregate({
+      const sumA = await (testPrisma as any).xPLedgerEntry.aggregate({
         where: { studentId: studentA.id },
         _sum: { amount: true },
       });
-      const countB = await (testPrisma as any).xpLedgerEntry.count({
+      const countB = await (testPrisma as any).xPLedgerEntry.count({
         where: { studentId: studentB.id },
       });
-      const sumB = await (testPrisma as any).xpLedgerEntry.aggregate({
+      const sumB = await (testPrisma as any).xPLedgerEntry.aggregate({
         where: { studentId: studentB.id },
         _sum: { amount: true },
       });

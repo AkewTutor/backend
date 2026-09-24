@@ -1,9 +1,18 @@
-// STUB: auto-generated placeholder to satisfy TypeScript module resolution.
-// TODO: implement real logic.
 import { z } from 'zod';
 
 export const createBadgeSchema = z.object({
-  body: z.record(z.string(), z.unknown()).optional(),
-  params: z.record(z.string(), z.unknown()).optional(),
-  query: z.record(z.string(), z.unknown()).optional(),
+  body: z.object({
+    name: z.string().min(1),
+    description: z.string().min(1),
+    category: z.enum(['STUDENT', 'TUTOR']),
+    criteriaDescription: z.string().min(1),
+    isActive: z.boolean().optional(),
+  }),
+});
+
+export const updateBadgeSchema = z.object({
+  body: z.object({
+    isActive: z.boolean().optional(),
+    criteriaDescription: z.string().min(1).optional(),
+  }),
 });

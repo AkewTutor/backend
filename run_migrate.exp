@@ -1,0 +1,13 @@
+#!/usr/bin/expect -f
+set timeout -1
+spawn npx prisma migrate dev --name gamification_engagement
+expect "We need to reset the \"public\" schema at \"localhost:5433\"" {
+    send "y\r"
+    exp_continue
+} "Do you want to continue? All existing data will be lost." {
+    send "y\r"
+    exp_continue
+} "Are you sure you want to create and apply this migration?" {
+    send "y\r"
+    exp_continue
+} eof

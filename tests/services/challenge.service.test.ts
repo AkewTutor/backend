@@ -13,6 +13,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../../src/config/db.js', () => ({
   prisma: {
     challenge: {
+      findUnique: vi.fn(),
       create: vi.fn(),
       findMany: vi.fn(),
     },
@@ -43,8 +44,11 @@ const VALID_INPUT = {
   targetValue: 3,
 };
 
-describe.skip('createChallenge', () => {
-  beforeEach(() => vi.clearAllMocks());
+describe('createChallenge', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (prisma.challenge.findUnique as any).mockResolvedValue({ id: CHALLENGE_ID, targetValue: 3 });
+  });
 
   it('creates a valid challenge', async () => {
     (prisma.challenge.create as any).mockResolvedValue({
@@ -74,7 +78,7 @@ describe.skip('createChallenge', () => {
   });
 });
 
-describe.skip('listActiveChallenges', () => {
+describe('listActiveChallenges', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('returns only currently-active challenges', async () => {
@@ -116,8 +120,11 @@ describe.skip('listActiveChallenges', () => {
   });
 });
 
-describe.skip('trackProgress', () => {
-  beforeEach(() => vi.clearAllMocks());
+describe('trackProgress', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (prisma.challenge.findUnique as any).mockResolvedValue({ id: CHALLENGE_ID, targetValue: 3 });
+  });
 
   it('upserts progress and sets completedAt once the target is reached', async () => {
     let progressValue = 0;

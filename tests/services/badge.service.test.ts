@@ -41,7 +41,7 @@ const STUDENT_ID = 'student-1';
 const TUTOR_ID = 'tutor-1';
 const BADGE_ID = 'badge-1';
 
-describe.skip('awardStudentBadge / awardTutorBadge', () => {
+describe('awardStudentBadge / awardTutorBadge', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('awards a student badge', async () => {
@@ -126,7 +126,7 @@ describe.skip('awardStudentBadge / awardTutorBadge', () => {
   });
 });
 
-describe.skip('createBadge — I2 fix', () => {
+describe('createBadge — I2 fix', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('creates a new badge definition', async () => {
@@ -189,7 +189,7 @@ describe.skip('createBadge — I2 fix', () => {
   });
 });
 
-describe.skip('adminManageBadges', () => {
+describe('adminManageBadges', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('list mode returns paginated badges filtered by category', async () => {

@@ -21,7 +21,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../src/config/db.js', () => ({
   prisma: {
-    xpLedgerEntry: {
+    xPLedgerEntry: {
       create: vi.fn(),
       findMany: vi.fn(),
       groupBy: vi.fn(),
@@ -60,11 +60,11 @@ function mockCreatedEntry(overrides: Record<string, unknown> = {}) {
     createdAt: new Date(),
     ...overrides,
   };
-  (prisma.xpLedgerEntry.create as any).mockResolvedValue(entry);
+  (prisma.xPLedgerEntry.create as any).mockResolvedValue(entry);
   return entry;
 }
 
-describe.skip('awardXP', () => {
+describe('awardXP', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -75,7 +75,7 @@ describe.skip('awardXP', () => {
     const result = await awardXP(STUDENT_ID, undefined as any, 'CLASS_ATTENDED' as any);
 
     expect(result.amount).toBe(20);
-    const createArg = (prisma.xpLedgerEntry.create as any).mock.calls[0][0];
+    const createArg = (prisma.xPLedgerEntry.create as any).mock.calls[0][0];
     expect(createArg.data.amount).toBe(20);
   });
 
@@ -138,10 +138,10 @@ describe.skip('awardXP', () => {
 
     await awardXP(STUDENT_ID, undefined as any, 'CLASS_ATTENDED' as any);
 
-    expect(prisma.xpLedgerEntry.create).toHaveBeenCalledTimes(1);
+    expect(prisma.xPLedgerEntry.create).toHaveBeenCalledTimes(1);
     expect((prisma.studentProfile as any).update).toBeUndefined();
-    expect((prisma.xpLedgerEntry as any).update).toBeUndefined();
-    expect((prisma.xpLedgerEntry as any).updateMany).toBeUndefined();
+    expect((prisma.xPLedgerEntry as any).update).toBeUndefined();
+    expect((prisma.xPLedgerEntry as any).updateMany).toBeUndefined();
   });
 
   it('also updates the streak for the same event', async () => {
@@ -155,13 +155,13 @@ describe.skip('awardXP', () => {
   });
 });
 
-describe.skip('getLeaderboard', () => {
+describe('getLeaderboard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (prisma.studentProfile.findUnique as any).mockResolvedValue({
       id: STUDENT_ID,
       grade: 8,
-      user: { firstName: 'Bethel', lastName: 'Molla' },
+      user: { name: 'Bethel Molla' },
     });
   });
 
@@ -174,21 +174,21 @@ describe.skip('getLeaderboard', () => {
       { studentId: STUDENT_ID, grade: 8, _sum: { amount: 40 } },
       { studentId: 'grade-10-student', grade: 10, _sum: { amount: 999 } },
     ];
-    (prisma.xpLedgerEntry.groupBy as any).mockImplementation((args: any) => {
+    (prisma.xPLedgerEntry.groupBy as any).mockImplementation((args: any) => {
       const requestedGrade = args?.where?.student?.grade ?? args?.where?.grade;
       return Promise.resolve(mixedDataset.filter((row) => row.grade === requestedGrade));
     });
 
     const result = await getLeaderboard(STUDENT_ID, 'STUDENT' as any, undefined, 'WEEKLY' as any);
 
-    const groupByArg = (prisma.xpLedgerEntry.groupBy as any).mock.calls[0][0];
+    const groupByArg = (prisma.xPLedgerEntry.groupBy as any).mock.calls[0][0];
     expect(JSON.stringify(groupByArg)).toContain('8');
     expect(result.rankings.some((r: any) => r.xp === 999)).toBe(false);
     expect(result.rankings.some((r: any) => r.xp === 40)).toBe(true);
   });
 
   it('displayName is always first name + last-initial, never a reachable lastName field', async () => {
-    (prisma.xpLedgerEntry.groupBy as any).mockResolvedValue([
+    (prisma.xPLedgerEntry.groupBy as any).mockResolvedValue([
       { studentId: STUDENT_ID, _sum: { amount: 340 } },
     ]);
 
@@ -202,16 +202,16 @@ describe.skip('getLeaderboard', () => {
   });
 
   it('WEEKLY vs MONTHLY use genuinely different aggregation windows', async () => {
-    (prisma.xpLedgerEntry.groupBy as any).mockResolvedValue([
+    (prisma.xPLedgerEntry.groupBy as any).mockResolvedValue([
       { studentId: STUDENT_ID, _sum: { amount: 100 } },
     ]);
 
     await getLeaderboard(STUDENT_ID, 'STUDENT' as any, undefined, 'WEEKLY' as any);
-    const weeklyArg = (prisma.xpLedgerEntry.groupBy as any).mock.calls[0][0];
+    const weeklyArg = (prisma.xPLedgerEntry.groupBy as any).mock.calls[0][0];
 
-    (prisma.xpLedgerEntry.groupBy as any).mockClear();
+    (prisma.xPLedgerEntry.groupBy as any).mockClear();
     await getLeaderboard(STUDENT_ID, 'STUDENT' as any, undefined, 'MONTHLY' as any);
-    const monthlyArg = (prisma.xpLedgerEntry.groupBy as any).mock.calls[0][0];
+    const monthlyArg = (prisma.xPLedgerEntry.groupBy as any).mock.calls[0][0];
 
     expect(JSON.stringify(weeklyArg.where.createdAt)).not.toBe(
       JSON.stringify(monthlyArg.where.createdAt),
@@ -225,7 +225,7 @@ describe.skip('getLeaderboard', () => {
       studentId: STUDENT_ID,
       status: 'ACTIVE',
     });
-    (prisma.xpLedgerEntry.groupBy as any).mockResolvedValue([
+    (prisma.xPLedgerEntry.groupBy as any).mockResolvedValue([
       { studentId: STUDENT_ID, _sum: { amount: 50 } },
     ]);
 
@@ -243,7 +243,7 @@ describe.skip('getLeaderboard', () => {
   });
 
   it('student caller ignores any studentId override', async () => {
-    (prisma.xpLedgerEntry.groupBy as any).mockResolvedValue([
+    (prisma.xPLedgerEntry.groupBy as any).mockResolvedValue([
       { studentId: STUDENT_ID, _sum: { amount: 50 } },
     ]);
 
@@ -259,7 +259,7 @@ describe.skip('getLeaderboard', () => {
       studentId: i === 46 ? STUDENT_ID : `student-${i}`,
       _sum: { amount: 50 - i },
     }));
-    (prisma.xpLedgerEntry.groupBy as any).mockResolvedValue(rankings);
+    (prisma.xPLedgerEntry.groupBy as any).mockResolvedValue(rankings);
 
     const result = await getLeaderboard(STUDENT_ID, 'STUDENT' as any, undefined, 'WEEKLY' as any);
 
@@ -267,7 +267,7 @@ describe.skip('getLeaderboard', () => {
   });
 });
 
-describe.skip('adminAdjustXP', () => {
+describe('adminAdjustXP', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (prisma.studentProfile.findUnique as any).mockResolvedValue({ id: STUDENT_ID });
@@ -302,7 +302,7 @@ describe.skip('adminAdjustXP', () => {
       statusCode: 400,
       message: 'amount must be a non-zero integer',
     });
-    expect(prisma.xpLedgerEntry.create).not.toHaveBeenCalled();
+    expect(prisma.xPLedgerEntry.create).not.toHaveBeenCalled();
   });
 
   it('rejects a missing/empty note', async () => {
@@ -310,7 +310,7 @@ describe.skip('adminAdjustXP', () => {
       statusCode: 400,
       message: 'A note is required for a manual XP adjustment',
     });
-    expect(prisma.xpLedgerEntry.create).not.toHaveBeenCalled();
+    expect(prisma.xPLedgerEntry.create).not.toHaveBeenCalled();
   });
 
   it('throws 404 when no matching StudentProfile is found', async () => {
@@ -334,7 +334,7 @@ describe.skip('adminAdjustXP', () => {
     mockCreatedEntry({ amount: 15, reason: 'OTHER', note: 'Adjustment' });
     await adminAdjustXP(STUDENT_ID, ADMIN_ID, 15, 'Adjustment');
 
-    (prisma.xpLedgerEntry.groupBy as any).mockResolvedValue([
+    (prisma.xPLedgerEntry.groupBy as any).mockResolvedValue([
       { studentId: STUDENT_ID, _sum: { amount: 15 } },
     ]);
     const leaderboard = await getLeaderboard(

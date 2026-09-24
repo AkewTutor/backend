@@ -25,6 +25,9 @@ import recordingConsentRouter from './recordingConsent.routes.js';
 import sessionMissRouter from './sessionMiss.routes.js';
 import recordingRouter from './recording.routes.js';
 import { libraryRouter, adminLibraryRouter } from './library.routes.js';
+import { gamificationXPRouter, adminXPRouter } from './xp.routes.js';
+import { gamificationBadgeRouter, adminBadgeRouter } from './badge.routes.js';
+import { gamificationChallengeRouter, adminChallengeRouter } from './challenge.routes.js';
 
 const router = Router();
 
@@ -61,5 +64,13 @@ router.use('/session-miss', sessionMissRouter);
 router.use('/recordings', recordingRouter);
 router.use('/library', libraryRouter);
 router.use('/admin/library', adminLibraryRouter);
+
+// ── gamification-engagement ────────────────────────────────────────
+router.use('/gamification', gamificationXPRouter);
+router.use('/admin/students', adminXPRouter);
+router.use('/gamification/badges', gamificationBadgeRouter);
+router.use('/admin/badges', adminBadgeRouter);
+router.use('/gamification/challenges', gamificationChallengeRouter);
+router.use('/admin/challenges', adminChallengeRouter);
 
 export default router;

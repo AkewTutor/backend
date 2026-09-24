@@ -16,7 +16,7 @@ function parse(body: Record<string, unknown>) {
   return createBadgeSchema.safeParse({ body, params: {}, query: {} });
 }
 
-describe.skip('createBadgeSchema', () => {
+describe('createBadgeSchema', () => {
   it('accepts a valid badge definition', () => {
     const result = parse({
       name: 'Quarter Champion',
