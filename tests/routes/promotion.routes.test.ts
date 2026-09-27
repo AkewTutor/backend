@@ -40,7 +40,7 @@ const validCreateBody = {
   validTo: '2026-09-30T00:00:00.000Z',
 };
 
-describe.skip('promotion.routes.ts', () => {
+describe('promotion.routes.ts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (promotionService.listActivePromotions as any).mockResolvedValue([]);

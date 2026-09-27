@@ -14,7 +14,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import crypto from 'node:crypto';
 
-const mockHttpPost = vi.fn();
+const { mockHttpPost } = vi.hoisted(() => ({ mockHttpPost: vi.fn() }));
 
 vi.mock('../../../src/config/env.js', () => ({
   env: {
@@ -48,7 +48,7 @@ function signBody(rawBody: Buffer, secret = WEBHOOK_SECRET): string {
   return crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
 }
 
-describe.skip('chapa.client.ts', () => {
+describe('chapa.client.ts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });

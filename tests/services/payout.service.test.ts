@@ -14,7 +14,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../src/config/db.js', () => ({
   prisma: {
-    $transaction: vi.fn(),
+    $transaction: vi.fn(async (cb) => cb(prisma)),
     tutorEarning: {
       findMany: vi.fn(),
       updateMany: vi.fn(),
@@ -40,7 +40,7 @@ function resetMocks() {
   vi.clearAllMocks();
 }
 
-describe.skip('generateMonthlyPayouts', () => {
+describe('generateMonthlyPayouts', () => {
   beforeEach(resetMocks);
 
   it('batches unpaid earnings per tutor for the period — creates exactly one Payout per tutor with unpaid earnings', async () => {
@@ -122,7 +122,7 @@ describe.skip('generateMonthlyPayouts', () => {
   });
 });
 
-describe.skip('markPaid', () => {
+describe('markPaid', () => {
   beforeEach(resetMocks);
 
   it('marks a pending payout paid', async () => {
@@ -160,7 +160,7 @@ describe.skip('markPaid', () => {
   });
 });
 
-describe.skip('adminAdjust', () => {
+describe('adminAdjust', () => {
   beforeEach(resetMocks);
 
   it('corrects a pending payout batch before it is paid (UC-82)', async () => {

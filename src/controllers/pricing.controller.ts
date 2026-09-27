@@ -1,17 +1,27 @@
-// STUB: auto-generated placeholder to satisfy TypeScript module resolution.
-// TODO: implement real logic.
-import type { Request, Response, NextFunction } from 'express';
-import asyncHandler from '../utils/asyncHandler.js';
+import { Request, Response, NextFunction } from 'express';
+import * as pricingService from '../services/pricing.service.js';
 import ApiError from '../utils/ApiError.js';
 
-export const adminUpdate = asyncHandler(
-  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    throw new ApiError(501, 'adminUpdate not implemented');
-  },
-);
+export const getActive = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const config = await pricingService.getActiveConfig();
+    return res.status(200).json({ data: config });
+  } catch (error) {
+    next(error);
+  }
+};
 
-export const getActive = asyncHandler(
-  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    throw new ApiError(501, 'getActive not implemented');
-  },
-);
+export const adminUpdate = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const format = req.params.format as string;
+    const adminId = (req as any).user?.id;
+    if (!adminId) {
+      throw new ApiError(401, 'Unauthorized');
+    }
+
+    const config = await pricingService.createAndActivateConfig(format, req.body, adminId);
+    return res.status(201).json({ data: config });
+  } catch (error) {
+    next(error);
+  }
+};

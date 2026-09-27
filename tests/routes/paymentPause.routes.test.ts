@@ -33,7 +33,7 @@ vi.mock('../../src/utils/jwt.js', () => ({
 import { prisma } from '../../src/config/db.js';
 import app from '../../src/app.js';
 
-describe.skip('paymentPause.routes.ts', () => {
+describe('paymentPause.routes.ts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (prisma.paymentPause.findFirst as any).mockResolvedValue(null);

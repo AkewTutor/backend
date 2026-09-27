@@ -15,7 +15,7 @@ import { initiatePaymentSchema } from '../../src/schemas/payment.schema.js';
 
 const VALID_UUID = '3fa85f64-5717-4562-b3fc-2c963f66afa6';
 
-describe.skip('initiatePaymentSchema', () => {
+describe('initiatePaymentSchema', () => {
   it('requires a valid cohortMembershipId', async () => {
     const result = await initiatePaymentSchema.safeParseAsync({
       body: { cohortMembershipId: 'not-a-uuid' },

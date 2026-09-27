@@ -33,7 +33,7 @@ vi.mock('../../src/utils/jwt.js', () => ({
 import * as paymentService from '../../src/services/payment.service.js';
 import app from '../../src/app.js';
 
-describe.skip('payment.routes.ts', () => {
+describe('payment.routes.ts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (paymentService.initiatePayment as any).mockResolvedValue({

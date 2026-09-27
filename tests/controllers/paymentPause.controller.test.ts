@@ -41,7 +41,7 @@ function mockRes() {
   return res as Response & { status: ReturnType<typeof vi.fn>; json: ReturnType<typeof vi.fn> };
 }
 
-describe.skip('paymentPause.controller.ts', () => {
+describe('paymentPause.controller.ts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });

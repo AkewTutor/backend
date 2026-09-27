@@ -1,23 +1,45 @@
-// STUB: auto-generated placeholder to satisfy TypeScript module resolution.
-// TODO: implement real logic.
-import type { Request, Response, NextFunction } from 'express';
-import asyncHandler from '../utils/asyncHandler.js';
+import { Request, Response, NextFunction } from 'express';
+import { prisma } from '../config/db.js';
+import * as refundService from '../services/refund.service.js';
 import ApiError from '../utils/ApiError.js';
+import { RefundStatus } from '@prisma/client';
 
-export const adminApprove = asyncHandler(
-  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    throw new ApiError(501, 'adminApprove not implemented');
-  },
-);
+export const adminReview = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const status = (req.query.status as RefundStatus) || 'PENDING';
+    const refunds = await prisma.refund.findMany({
+      where: { status },
+    });
+    return res.status(200).json({ data: refunds });
+  } catch (error) {
+    next(error);
+  }
+};
 
-export const adminReject = asyncHandler(
-  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    throw new ApiError(501, 'adminReject not implemented');
-  },
-);
+export const adminApprove = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const adminId = (req as any).user?.id;
+    if (!adminId) throw new ApiError(401, 'Unauthorized');
 
-export const adminReview = asyncHandler(
-  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    throw new ApiError(501, 'adminReview not implemented');
-  },
-);
+    const result = await refundService.approveRefund(req.params.refundId as string, adminId);
+    return res.status(200).json({ data: result });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const adminReject = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const adminId = (req as any).user?.id;
+    if (!adminId) throw new ApiError(401, 'Unauthorized');
+
+    const result = await refundService.rejectRefund(
+      req.params.refundId as string,
+      adminId,
+      req.body.rejectionReason,
+    );
+    return res.status(200).json({ data: result });
+  } catch (error) {
+    next(error);
+  }
+};

@@ -40,6 +40,7 @@ vi.mock('../../src/config/db.js', () => ({
       create: vi.fn(),
       findUnique: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
     },
   },
 }));
@@ -82,7 +83,7 @@ function mockPaymentWithCohort(
   return { payment: { ...payment, id: paymentId }, cohort, membership };
 }
 
-describe.skip('calculateProration', () => {
+describe('calculateProration', () => {
   beforeEach(resetMocks);
 
   it('sessions-delivered proration formula, worked example — (3/8) × 800.00 = 300.00', async () => {
@@ -189,7 +190,7 @@ describe.skip('calculateProration', () => {
   });
 });
 
-describe.skip('createPendingRefund — I1 fix', () => {
+describe('createPendingRefund — I1 fix', () => {
   beforeEach(resetMocks);
 
   it('creates a PENDING refund with the calculated amount already stored', async () => {
@@ -236,7 +237,8 @@ describe.skip('createPendingRefund — I1 fix', () => {
     // if session state changed after the refund was already created.
     (prisma.scheduledSession.count as any).mockResolvedValue(5);
     (prisma.refund.findUnique as any).mockResolvedValue(pendingRefund);
-    (prisma.refund.update as any).mockResolvedValue({
+    (prisma.refund.updateMany as any).mockResolvedValue({ count: 1 });
+    (prisma.refund.findUnique as any).mockResolvedValueOnce(pendingRefund).mockResolvedValue({
       ...pendingRefund,
       status: 'APPROVED',
       approvedById: 'admin-1',
@@ -252,7 +254,7 @@ describe.skip('createPendingRefund — I1 fix', () => {
   });
 });
 
-describe.skip('approveRefund', () => {
+describe('approveRefund', () => {
   beforeEach(resetMocks);
 
   it('approves a qualifying, PENDING refund', async () => {
@@ -264,7 +266,8 @@ describe.skip('approveRefund', () => {
       amount: '300.00',
     });
     (prisma.refund.findUnique as any).mockResolvedValue(pendingRefund);
-    (prisma.refund.update as any).mockResolvedValue({
+    (prisma.refund.updateMany as any).mockResolvedValue({ count: 1 });
+    (prisma.refund.findUnique as any).mockResolvedValueOnce(pendingRefund).mockResolvedValue({
       ...pendingRefund,
       status: 'APPROVED',
       approvedById: 'admin-1',
@@ -361,7 +364,8 @@ describe.skip('approveRefund', () => {
       amount: '300.00',
     });
     (prisma.refund.findUnique as any).mockResolvedValue(pendingRefund);
-    (prisma.refund.update as any).mockResolvedValue({
+    (prisma.refund.updateMany as any).mockResolvedValue({ count: 1 });
+    (prisma.refund.findUnique as any).mockResolvedValueOnce(pendingRefund).mockResolvedValue({
       ...pendingRefund,
       status: 'APPROVED',
       approvedById: 'admin-1',
@@ -384,7 +388,7 @@ describe.skip('approveRefund', () => {
   });
 });
 
-describe.skip('rejectRefund — I1 fix', () => {
+describe('rejectRefund — I1 fix', () => {
   beforeEach(resetMocks);
 
   it('rejects a PENDING refund', async () => {
@@ -396,7 +400,8 @@ describe.skip('rejectRefund — I1 fix', () => {
       amount: '43.75',
     });
     (prisma.refund.findUnique as any).mockResolvedValue(pendingRefund);
-    (prisma.refund.update as any).mockResolvedValue({
+    (prisma.refund.updateMany as any).mockResolvedValue({ count: 1 });
+    (prisma.refund.findUnique as any).mockResolvedValueOnce(pendingRefund).mockResolvedValue({
       ...pendingRefund,
       status: 'REJECTED',
       rejectedById: 'admin-1',
@@ -452,7 +457,8 @@ describe.skip('rejectRefund — I1 fix', () => {
       amount: '43.75',
     });
     (prisma.refund.findUnique as any).mockResolvedValue(pendingRefund);
-    (prisma.refund.update as any).mockResolvedValue({
+    (prisma.refund.updateMany as any).mockResolvedValue({ count: 1 });
+    (prisma.refund.findUnique as any).mockResolvedValueOnce(pendingRefund).mockResolvedValue({
       ...pendingRefund,
       status: 'REJECTED',
       rejectedById: 'admin-1',
@@ -462,7 +468,7 @@ describe.skip('rejectRefund — I1 fix', () => {
 
     await rejectRefund(pendingRefund.id, 'admin-1', 'Duplicate case');
 
-    expect(prisma.refund.update).toHaveBeenCalledWith(
+    expect(prisma.refund.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.not.objectContaining({ amount: expect.anything() }),
       }),
@@ -478,7 +484,8 @@ describe.skip('rejectRefund — I1 fix', () => {
       amount: '43.75',
     });
     (prisma.refund.findUnique as any).mockResolvedValue(pendingRefund);
-    (prisma.refund.update as any).mockResolvedValue({
+    (prisma.refund.updateMany as any).mockResolvedValue({ count: 1 });
+    (prisma.refund.findUnique as any).mockResolvedValueOnce(pendingRefund).mockResolvedValue({
       ...pendingRefund,
       status: 'REJECTED',
       rejectedById: 'admin-1',

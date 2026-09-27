@@ -35,6 +35,12 @@ vi.mock('../../src/config/db.js', () => ({
     parentStudentRelationship: {
       findFirst: vi.fn(),
     },
+    studentProfile: {
+      findUnique: vi.fn().mockResolvedValue({ id: 'student-profile-1', userId: 'student-1' }),
+    },
+    parentProfile: {
+      findUnique: vi.fn().mockResolvedValue({ id: 'parent-profile-1', userId: 'parent-1' }),
+    },
   },
 }));
 
@@ -89,7 +95,7 @@ function resetMocks() {
   (generateSessionsForCohort as any).mockResolvedValue(undefined);
 }
 
-describe.skip('initiatePayment', () => {
+describe('initiatePayment', () => {
   beforeEach(resetMocks);
 
   it('begins a Chapa checkout for an Admin-approved membership', async () => {
@@ -97,7 +103,9 @@ describe.skip('initiatePayment', () => {
       cohortId: 'cohort-1',
       studentId: 'student-1',
       status: 'PENDING_PAYMENT',
-    });
+      cohort: { format: 'ONE_TO_ONE' },
+      student: { userId: 'student-1' },
+    } as any);
     const pricing = buildPricingConfig({
       createdById: 'admin-1',
       isActive: true,
@@ -131,7 +139,9 @@ describe.skip('initiatePayment', () => {
       cohortId: 'cohort-1',
       studentId: 'student-1',
       status: 'PENDING_PAYMENT',
-    });
+      cohort: { format: 'ONE_TO_ONE' },
+      student: { userId: 'student-1' },
+    } as any);
     const rateXConfig = buildPricingConfig({
       createdById: 'admin-1',
       isActive: true,
@@ -167,7 +177,9 @@ describe.skip('initiatePayment', () => {
       cohortId: 'cohort-1',
       studentId: 'student-1',
       status: 'ACTIVE',
-    });
+      cohort: { format: 'ONE_TO_ONE' },
+      student: { userId: 'student-1' },
+    } as any);
     (prisma.cohortMembership.findUnique as any).mockResolvedValue(membership);
 
     await expect(initiatePayment('student-1', 'STUDENT', membership.id)).rejects.toMatchObject({
@@ -181,7 +193,9 @@ describe.skip('initiatePayment', () => {
       cohortId: 'cohort-1',
       studentId: 'student-1',
       status: 'PENDING_PAYMENT',
-    });
+      cohort: { format: 'ONE_TO_ONE' },
+      student: { userId: 'student-1' },
+    } as any);
     (prisma.cohortMembership.findUnique as any).mockResolvedValue(membership);
     (prisma.pricingConfig.findFirst as any).mockResolvedValue(
       buildPricingConfig({ createdById: 'admin-1', isActive: true }),
@@ -200,7 +214,9 @@ describe.skip('initiatePayment', () => {
       cohortId: 'cohort-1',
       studentId: 'student-9',
       status: 'PENDING_PAYMENT',
-    });
+      cohort: { format: 'ONE_TO_ONE' },
+      student: { userId: 'student-9' },
+    } as any);
     (prisma.cohortMembership.findUnique as any).mockResolvedValue(membership);
     (prisma.pricingConfig.findFirst as any).mockResolvedValue(
       buildPricingConfig({ createdById: 'admin-1', isActive: true }),
@@ -220,7 +236,9 @@ describe.skip('initiatePayment', () => {
       cohortId: 'cohort-1',
       studentId: 'student-1',
       status: 'PENDING_PAYMENT',
-    });
+      cohort: { format: 'ONE_TO_ONE' },
+      student: { userId: 'student-1' },
+    } as any);
     (prisma.cohortMembership.findUnique as any).mockResolvedValue(membership);
     (prisma.pricingConfig.findFirst as any).mockResolvedValue(
       buildPricingConfig({ createdById: 'admin-1', isActive: true }),
@@ -235,7 +253,7 @@ describe.skip('initiatePayment', () => {
   });
 });
 
-describe.skip('handleChapaWebhook / setBillingCycleAnchor', () => {
+describe('handleChapaWebhook / setBillingCycleAnchor', () => {
   beforeEach(resetMocks);
 
   function webhookPayload(overrides: Record<string, unknown> = {}) {
@@ -382,7 +400,7 @@ describe.skip('handleChapaWebhook / setBillingCycleAnchor', () => {
   });
 });
 
-describe.skip('getPaymentHistory', () => {
+describe('getPaymentHistory', () => {
   beforeEach(resetMocks);
 
   it('returns paginated history for the caller/target student', async () => {

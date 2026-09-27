@@ -42,7 +42,7 @@ function resetMocks() {
   vi.clearAllMocks();
 }
 
-describe.skip('createPromotion', () => {
+describe('createPromotion', () => {
   beforeEach(resetMocks);
 
   it('creates a new promotion', async () => {
@@ -107,7 +107,7 @@ describe.skip('createPromotion', () => {
   });
 });
 
-describe.skip('listActivePromotions', () => {
+describe('listActivePromotions', () => {
   beforeEach(resetMocks);
 
   it('excludes expired/inactive codes', async () => {
@@ -129,7 +129,7 @@ describe.skip('listActivePromotions', () => {
   });
 });
 
-describe.skip('applyToPayment', () => {
+describe('applyToPayment', () => {
   beforeEach(resetMocks);
 
   it('computes a PERCENT discount', async () => {

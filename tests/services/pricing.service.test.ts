@@ -39,7 +39,7 @@ function resetMocks() {
   vi.clearAllMocks();
 }
 
-describe.skip('getActiveConfig', () => {
+describe('getActiveConfig', () => {
   beforeEach(resetMocks);
 
   it('returns one active row per format', async () => {
@@ -74,7 +74,7 @@ describe.skip('getActiveConfig', () => {
   });
 });
 
-describe.skip('createAndActivateConfig', () => {
+describe('createAndActivateConfig', () => {
   beforeEach(resetMocks);
 
   it('mismatched split rejected at the service layer too', async () => {

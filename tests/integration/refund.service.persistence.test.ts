@@ -50,15 +50,19 @@ async function seedRealPendingRefund() {
   const studentUser = await db.user.create({
     data: buildUser({ role: 'STUDENT', email: `student-${randomUUID()}@example.test` }),
   });
-  await db.studentProfile.create({ data: buildStudentProfile({ userId: studentUser.id }) });
+  const studentProfile = await db.studentProfile.create({
+    data: buildStudentProfile({ userId: studentUser.id }),
+  });
   const tutorUser = await db.user.create({
     data: buildUser({ role: 'TUTOR', email: `tutor-${randomUUID()}@example.test` }),
   });
-  await db.tutorProfile.create({ data: buildTutorProfile({ userId: tutorUser.id }) });
+  const tutorProfile = await db.tutorProfile.create({
+    data: buildTutorProfile({ userId: tutorUser.id }),
+  });
   const subject = await db.subject.create({ data: buildSubject() });
   const cohort = await db.cohort.create({
     data: buildCohort({
-      tutorId: tutorUser.id,
+      tutorId: tutorProfile.id,
       subjectId: subject.id,
       status: 'ACTIVE',
       sessionsPerWeek: 2,
@@ -67,7 +71,7 @@ async function seedRealPendingRefund() {
   const membership = await db.cohortMembership.create({
     data: buildCohortMembership({
       cohortId: cohort.id,
-      studentId: studentUser.id,
+      studentId: studentProfile.id,
       status: 'ACTIVE',
     }),
   });
@@ -93,7 +97,7 @@ async function seedRealAdmin() {
   });
 }
 
-describe.skip('refund.service.ts — Integration (persistence)', () => {
+describe('refund.service.ts — Integration (persistence)', () => {
   beforeAll(async () => {
     await assertTestDbReachable();
   });

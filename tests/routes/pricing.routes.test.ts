@@ -32,7 +32,7 @@ const validSplit = {
   tutorSharePerHour: '250.00',
 };
 
-describe.skip('pricing.routes.ts', () => {
+describe('pricing.routes.ts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (pricingService.getActiveConfig as any).mockResolvedValue([]);

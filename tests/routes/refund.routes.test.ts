@@ -37,21 +37,26 @@ import { prisma } from '../../src/config/db.js';
 import * as refundService from '../../src/services/refund.service.js';
 import app from '../../src/app.js';
 
-describe.skip('refund.routes.ts', () => {
+describe('refund.routes.ts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (prisma.refund.findMany as any).mockResolvedValue([
-      { id: 'refund-1', status: 'PENDING', amount: '300.00', createdAt: new Date() },
+      {
+        id: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+        status: 'PENDING',
+        amount: '300.00',
+        createdAt: new Date(),
+      },
     ]);
     (refundService.approveRefund as any).mockResolvedValue({
-      id: 'refund-1',
+      id: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
       status: 'APPROVED',
       amount: '300.00',
       approvedById: 'admin-1',
       approvedAt: new Date(),
     });
     (refundService.rejectRefund as any).mockResolvedValue({
-      id: 'refund-1',
+      id: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
       status: 'REJECTED',
       rejectedById: 'admin-1',
       rejectedAt: new Date(),
@@ -61,8 +66,8 @@ describe.skip('refund.routes.ts', () => {
 
   it.each([
     ['get' as const, '/api/v1/admin/refunds'],
-    ['post' as const, '/api/v1/admin/refunds/refund-1/approve'],
-    ['post' as const, '/api/v1/admin/refunds/refund-1/reject'],
+    ['post' as const, '/api/v1/admin/refunds/3fa85f64-5717-4562-b3fc-2c963f66afa6/approve'],
+    ['post' as const, '/api/v1/admin/refunds/3fa85f64-5717-4562-b3fc-2c963f66afa6/reject'],
   ])('%s %s requires Admin — 401 with no token', async (method, path) => {
     const res = await request(app)[method](path).send({ rejectionReason: 'x' });
 
@@ -71,8 +76,8 @@ describe.skip('refund.routes.ts', () => {
 
   it.each([
     ['get' as const, '/api/v1/admin/refunds'],
-    ['post' as const, '/api/v1/admin/refunds/refund-1/approve'],
-    ['post' as const, '/api/v1/admin/refunds/refund-1/reject'],
+    ['post' as const, '/api/v1/admin/refunds/3fa85f64-5717-4562-b3fc-2c963f66afa6/approve'],
+    ['post' as const, '/api/v1/admin/refunds/3fa85f64-5717-4562-b3fc-2c963f66afa6/reject'],
   ])('%s %s requires Admin — 403 with a Parent token', async (method, path) => {
     const res = await request(app)
       [method](path)
@@ -92,7 +97,7 @@ describe.skip('refund.routes.ts', () => {
 
   it('POST /admin/refunds/:id/approve succeeds with an Admin token', async () => {
     const res = await request(app)
-      .post('/api/v1/admin/refunds/refund-1/approve')
+      .post('/api/v1/admin/refunds/3fa85f64-5717-4562-b3fc-2c963f66afa6/approve')
       .set('Authorization', 'Bearer admin-token');
 
     expect(res.status).toBe(200);
@@ -100,7 +105,7 @@ describe.skip('refund.routes.ts', () => {
 
   it('POST /admin/refunds/:id/reject validates rejectionReason — an empty body is rejected with 400, controller never called', async () => {
     const res = await request(app)
-      .post('/api/v1/admin/refunds/refund-1/reject')
+      .post('/api/v1/admin/refunds/3fa85f64-5717-4562-b3fc-2c963f66afa6/reject')
       .set('Authorization', 'Bearer admin-token')
       .send({});
 
@@ -110,7 +115,7 @@ describe.skip('refund.routes.ts', () => {
 
   it('POST /admin/refunds/:id/reject succeeds with an Admin token and a valid rejectionReason', async () => {
     const res = await request(app)
-      .post('/api/v1/admin/refunds/refund-1/reject')
+      .post('/api/v1/admin/refunds/3fa85f64-5717-4562-b3fc-2c963f66afa6/reject')
       .set('Authorization', 'Bearer admin-token')
       .send({ rejectionReason: 'Student-caused disruption' });
 

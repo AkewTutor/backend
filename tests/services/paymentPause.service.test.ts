@@ -65,7 +65,7 @@ function resetMocks() {
   vi.clearAllMocks();
 }
 
-describe.skip('pauseForNonPayment / resumeOnPayment', () => {
+describe('pauseForNonPayment / resumeOnPayment', () => {
   beforeEach(resetMocks);
 
   it('pauses on a missed due date — creates PaymentPause(reason: NONPAYMENT, startedAt)', async () => {
@@ -98,7 +98,7 @@ describe.skip('pauseForNonPayment / resumeOnPayment', () => {
   });
 });
 
-describe.skip('rescheduleSessionsDuringPause', () => {
+describe('rescheduleSessionsDuringPause', () => {
   beforeEach(resetMocks);
 
   it('sessions inside the pause window are rescheduled, not miss-flagged — no fault classification generated', async () => {

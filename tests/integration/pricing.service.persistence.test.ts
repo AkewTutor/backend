@@ -54,7 +54,7 @@ async function seedRealActiveConfig(format: string, adminId: string) {
   });
 }
 
-describe.skip('pricing.service.ts — Integration (persistence)', () => {
+describe('pricing.service.ts — Integration (persistence)', () => {
   beforeAll(async () => {
     await assertTestDbReachable();
   });
@@ -78,7 +78,9 @@ describe.skip('pricing.service.ts — Integration (persistence)', () => {
       where: { format: 'ONE_TO_ONE', isActive: true },
     });
     expect(activeRows).toHaveLength(1);
-    expect(activeRows[0].pricePerStudentPerHour).toBe(validSplit.pricePerStudentPerHour);
+    expect(Number(activeRows[0].pricePerStudentPerHour)).toBe(
+      Number(validSplit.pricePerStudentPerHour),
+    );
   });
 
   it('two admins racing to activate a new config for the same format — never two active rows, never zero', async () => {

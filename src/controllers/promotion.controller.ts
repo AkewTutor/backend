@@ -1,23 +1,36 @@
-// STUB: auto-generated placeholder to satisfy TypeScript module resolution.
-// TODO: implement real logic.
-import type { Request, Response, NextFunction } from 'express';
-import asyncHandler from '../utils/asyncHandler.js';
+import { Request, Response, NextFunction } from 'express';
+import * as promotionService from '../services/promotion.service.js';
 import ApiError from '../utils/ApiError.js';
 
-export const adminCreate = asyncHandler(
-  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    throw new ApiError(501, 'adminCreate not implemented');
-  },
-);
+export const listActive = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await promotionService.listActivePromotions();
+    return res.status(200).json({ data: result });
+  } catch (err) {
+    next(err);
+  }
+};
 
-export const adminEdit = asyncHandler(
-  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    throw new ApiError(501, 'adminEdit not implemented');
-  },
-);
+export const adminCreate = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const adminId = (req as any).user?.id;
+    if (!adminId) throw new ApiError(401, 'Unauthorized');
 
-export const listActive = asyncHandler(
-  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    throw new ApiError(501, 'listActive not implemented');
-  },
-);
+    const result = await promotionService.createPromotion(req.body, adminId);
+    return res.status(201).json({ data: result });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const adminEdit = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const adminId = (req as any).user?.id;
+    if (!adminId) throw new ApiError(401, 'Unauthorized');
+
+    const result = await promotionService.updatePromotion(req.params.id, req.body);
+    return res.status(200).json({ data: result });
+  } catch (err) {
+    next(err);
+  }
+};

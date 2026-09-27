@@ -54,14 +54,16 @@ async function seedRealTutorWithUnpaidEarnings() {
   const tutorUser = await db.user.create({
     data: buildUser({ role: 'TUTOR', email: `tutor-${randomUUID()}@example.test` }),
   });
-  await db.tutorProfile.create({ data: buildTutorProfile({ userId: tutorUser.id }) });
+  const tutorProfile = await db.tutorProfile.create({
+    data: buildTutorProfile({ userId: tutorUser.id }),
+  });
   const adminUser = await db.user.create({
     data: buildUser({ role: 'ADMIN', email: `admin-${randomUUID()}@example.test` }),
   });
   const subject = await db.subject.create({ data: buildSubject() });
   const cohort = await db.cohort.create({
     data: buildCohort({
-      tutorId: tutorUser.id,
+      tutorId: tutorProfile.id,
       subjectId: subject.id,
       status: 'ACTIVE',
       sessionsPerWeek: 2,
@@ -90,11 +92,11 @@ async function seedRealTutorWithUnpaidEarnings() {
   });
 
   for (const session of fullSessions) {
-    await creditEarning(session.id, tutorUser.id, 'FULL');
+    await creditEarning(session.id, tutorProfile.id, 'FULL');
   }
-  await creditEarning(makeupSession.id, tutorUser.id, 'REDUCED_MAKEUP');
+  await creditEarning(makeupSession.id, tutorProfile.id, 'REDUCED_MAKEUP');
 
-  return { tutorUser };
+  return { tutorUser, tutorProfile };
 }
 
 /** A wide window guaranteed to contain "now" — earnings above are all created at seed time. */
@@ -105,7 +107,7 @@ function currentPeriod() {
   return { periodStart, periodEnd };
 }
 
-describe.skip('payout.service.ts — Integration (persistence)', () => {
+describe('payout.service.ts — Integration (persistence)', () => {
   beforeAll(async () => {
     await assertTestDbReachable();
   });
@@ -119,14 +121,14 @@ describe.skip('payout.service.ts — Integration (persistence)', () => {
   });
 
   it('Payout totals are computed from real, seeded ledger rows — "612.50" is the real sum of 4 real TutorEarning rows', async () => {
-    const { tutorUser } = await seedRealTutorWithUnpaidEarnings();
+    const { tutorUser, tutorProfile } = await seedRealTutorWithUnpaidEarnings();
     const { periodStart, periodEnd } = currentPeriod();
 
     await generateMonthlyPayouts(periodStart, periodEnd);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const db = testPrisma as any;
-    const earningRows = await db.tutorEarning.findMany({ where: { tutorId: tutorUser.id } });
+    const earningRows = await db.tutorEarning.findMany({ where: { tutorId: tutorProfile.id } });
     expect(earningRows).toHaveLength(4);
     const realSum = earningRows
       .reduce(
@@ -136,14 +138,14 @@ describe.skip('payout.service.ts — Integration (persistence)', () => {
       .toFixed(2);
     expect(realSum).toBe('612.50');
 
-    const payoutRows = await db.payout.findMany({ where: { tutorId: tutorUser.id } });
+    const payoutRows = await db.payout.findMany({ where: { tutorId: tutorProfile.id } });
     expect(payoutRows).toHaveLength(1);
     expect(payoutRows[0].status).toBe('PENDING');
-    expect(payoutRows[0].totalAmount).toBe(realSum);
+    expect(new Decimal(payoutRows[0].totalAmount as any).toFixed(2)).toBe(realSum);
   });
 
   it('batched earnings are really linked, preventing a second run from double-counting', async () => {
-    const { tutorUser } = await seedRealTutorWithUnpaidEarnings();
+    const { tutorUser, tutorProfile } = await seedRealTutorWithUnpaidEarnings();
     const { periodStart, periodEnd } = currentPeriod();
 
     const firstRun = await generateMonthlyPayouts(periodStart, periodEnd);
@@ -151,15 +153,17 @@ describe.skip('payout.service.ts — Integration (persistence)', () => {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const db = testPrisma as any;
-    const firstPayout = await db.payout.findFirst({ where: { tutorId: tutorUser.id } });
+    const firstPayout = await db.payout.findFirst({ where: { tutorId: tutorProfile.id } });
 
     const secondRun = await generateMonthlyPayouts(periodStart, periodEnd);
 
     expect(secondRun.created).toBe(0);
-    const payoutRowsAfter = await db.payout.findMany({ where: { tutorId: tutorUser.id } });
+    const payoutRowsAfter = await db.payout.findMany({ where: { tutorId: tutorProfile.id } });
     expect(payoutRowsAfter).toHaveLength(1);
 
-    const earningRowsAfter = await db.tutorEarning.findMany({ where: { tutorId: tutorUser.id } });
+    const earningRowsAfter = await db.tutorEarning.findMany({
+      where: { tutorId: tutorProfile.id },
+    });
     expect(earningRowsAfter).toHaveLength(4);
     expect(
       earningRowsAfter.every((row: { payoutId: string | null }) => row.payoutId === firstPayout.id),

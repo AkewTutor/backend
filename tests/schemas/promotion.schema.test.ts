@@ -22,7 +22,7 @@ function basePromotion(overrides: Record<string, unknown> = {}) {
   };
 }
 
-describe.skip('createPromotionSchema', () => {
+describe('createPromotionSchema', () => {
   it('requires validTo after validFrom', async () => {
     const result = await createPromotionSchema.safeParseAsync({
       body: basePromotion({

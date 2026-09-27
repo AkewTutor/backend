@@ -13,7 +13,7 @@ import { rejectRefundSchema } from '../../src/schemas/refund.schema.js';
 
 const VALID_UUID = '3fa85f64-5717-4562-b3fc-2c963f66afa6';
 
-describe.skip('rejectRefundSchema', () => {
+describe('rejectRefundSchema', () => {
   it('rejects an empty rejectionReason', async () => {
     const result = await rejectRefundSchema.safeParseAsync({
       params: { refundId: VALID_UUID },

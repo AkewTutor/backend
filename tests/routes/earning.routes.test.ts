@@ -26,7 +26,7 @@ vi.mock('../../src/utils/jwt.js', () => ({
 import * as earningService from '../../src/services/earning.service.js';
 import app from '../../src/app.js';
 
-describe.skip('earning.routes.ts', () => {
+describe('earning.routes.ts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (earningService.getEarningsForTutor as any).mockResolvedValue({

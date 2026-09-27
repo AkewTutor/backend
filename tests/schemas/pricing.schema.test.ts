@@ -11,7 +11,7 @@ import { describe, expect, it } from 'vitest';
 
 import { updatePricingConfigSchema } from '../../src/schemas/pricing.schema.js';
 
-describe.skip('updatePricingConfigSchema', () => {
+describe('updatePricingConfigSchema', () => {
   it('rejects a mismatched share/total split', async () => {
     const result = await updatePricingConfigSchema.safeParseAsync({
       params: { format: 'ONE_TO_ONE' },

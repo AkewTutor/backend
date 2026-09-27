@@ -31,6 +31,7 @@ vi.mock('../../src/config/db.js', () => ({
       findUnique: vi.fn(),
       create: vi.fn(),
       findMany: vi.fn(),
+      count: vi.fn(),
     },
     payout: {
       findFirst: vi.fn(),
@@ -61,7 +62,7 @@ function resetMocks() {
   (prisma.tutorEarning.findUnique as any).mockResolvedValue(null);
 }
 
-describe.skip('creditEarning', () => {
+describe('creditEarning', () => {
   beforeEach(resetMocks);
 
   it("FULL rate credits the tutor's normal share", async () => {
@@ -190,7 +191,7 @@ describe.skip('creditEarning', () => {
   });
 });
 
-describe.skip('getEarningsForTutor', () => {
+describe('getEarningsForTutor', () => {
   beforeEach(resetMocks);
 
   it('upcomingPayout is always computed, never a stored draft', async () => {
@@ -246,6 +247,7 @@ describe.skip('getEarningsForTutor', () => {
 
   it('no earnings yet resolves an empty list with a zeroed upcomingPayout, not an error', async () => {
     (prisma.tutorEarning.findMany as any).mockResolvedValue([]);
+    (prisma.tutorEarning.count as any).mockResolvedValue(0);
 
     const result = await getEarningsForTutor('tutor-1', 1, 20);
 

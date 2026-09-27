@@ -35,17 +35,22 @@ import { buildScheduledSession } from '../factories/class-delivery-library.facto
 async function seedRealSession() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- see header comment (bare schema).
   const db = testPrisma as any;
+
   const tutorUser = await db.user.create({
     data: buildUser({ role: 'TUTOR', email: `tutor-${randomUUID()}@example.test` }),
   });
-  await db.tutorProfile.create({ data: buildTutorProfile({ userId: tutorUser.id }) });
+
+  const tutorProfile = await db.tutorProfile.create({
+    data: buildTutorProfile({ userId: tutorUser.id }),
+  });
+
   const adminUser = await db.user.create({
     data: buildUser({ role: 'ADMIN', email: `admin-${randomUUID()}@example.test` }),
   });
   const subject = await db.subject.create({ data: buildSubject() });
   const cohort = await db.cohort.create({
     data: buildCohort({
-      tutorId: tutorUser.id,
+      tutorId: tutorProfile.id,
       subjectId: subject.id,
       status: 'ACTIVE',
       sessionsPerWeek: 2,
@@ -62,10 +67,10 @@ async function seedRealSession() {
   const session = await db.scheduledSession.create({
     data: buildScheduledSession({ cohortId: cohort.id }),
   });
-  return { tutorUser, session };
+  return { tutorUser, tutorProfile, session };
 }
 
-describe.skip('earning.service.ts — Integration (persistence)', () => {
+describe('earning.service.ts — Integration (persistence)', () => {
   beforeAll(async () => {
     await assertTestDbReachable();
   });
@@ -79,13 +84,13 @@ describe.skip('earning.service.ts — Integration (persistence)', () => {
   });
 
   it('the TutorEarning(sessionId) unique constraint is real, not merely documented — a direct duplicate insert is rejected (P2002)', async () => {
-    const { tutorUser, session } = await seedRealSession();
+    const { tutorUser, tutorProfile, session } = await seedRealSession();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const db = testPrisma as any;
     await db.tutorEarning.create({
       data: {
         id: randomUUID(),
-        tutorId: tutorUser.id,
+        tutorId: tutorProfile.id,
         sessionId: session.id,
         amount: '175.00',
         rateType: 'FULL',
@@ -99,7 +104,7 @@ describe.skip('earning.service.ts — Integration (persistence)', () => {
       await db.tutorEarning.create({
         data: {
           id: randomUUID(),
-          tutorId: tutorUser.id,
+          tutorId: tutorProfile.id,
           sessionId: session.id,
           amount: '175.00',
           rateType: 'FULL',
@@ -116,11 +121,11 @@ describe.skip('earning.service.ts — Integration (persistence)', () => {
   });
 
   it('creditEarning called twice concurrently for the same session never produces two earning rows', async () => {
-    const { tutorUser, session } = await seedRealSession();
+    const { tutorUser, tutorProfile, session } = await seedRealSession();
 
     const results = await Promise.allSettled([
-      creditEarning(session.id, tutorUser.id, 'FULL'),
-      creditEarning(session.id, tutorUser.id, 'FULL'),
+      creditEarning(session.id, tutorProfile.id, 'FULL'),
+      creditEarning(session.id, tutorProfile.id, 'FULL'),
     ]);
 
     const fulfilled = results.filter((r) => r.status === 'fulfilled');
