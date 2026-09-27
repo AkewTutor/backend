@@ -122,6 +122,8 @@ enum UserAccountStatus {
 // ─────────────────────────────────────────────────────────────
 
 model User {
+  filedComplaints              ComplaintReport[] @relation("ComplaintReporter")
+  resolvedComplaints           ComplaintReport[] @relation("ComplaintResolver")
   id                           String            @id @default(uuid())
   name                         String?
   role                         UserRole
@@ -155,12 +157,17 @@ model User {
   announcements                 Announcement[]
   revokedRelationships          ParentStudentRelationship[]
   cohorts                       Cohort[]
+  earnings                      TutorEarning[]
+  payouts                       Payout[]
   pricingConfigs                PricingConfig[]
   rescheduleRequestsRequested   RescheduleRequest[]
   recordingConsentsAcknowledged RecordingConsent[]          @relation("ConsentAcknowledgedBy")
   messageThreads                MessageThread[]
   messages                      Message[]
   challenges                    Challenge[]
+  refundsApproved               Refund[]                    @relation("RefundApprovedBy")
+  refundsRejected               Refund[]                    @relation("RefundRejectedBy")
+  promotionsCreated             PromotionCode[]
 }
 
 model StudentProfile {
@@ -236,6 +243,8 @@ model TutorProfile {
   recordingConsents RecordingConsent[]
   libraryMaterials  LibraryMaterial[]
   weeklyAssessments WeeklyAssessment[]
+  tutorEarnings     TutorEarning[]
+  payouts           Payout[]
 }
 
 model RefreshToken {
@@ -415,11 +424,12 @@ enum MembershipStatus {
 }
 
 model Cohort {
-  id                            String           @id @default(uuid())
+  complaints                    ComplaintReport[]
+  id                            String            @id @default(uuid())
   tutorId                       String
   subjectId                     String
-  status                        CohortStatus     @default(FORMING)
-  format                        TutoringFormat   @default(ONE_TO_ONE)
+  status                        CohortStatus      @default(FORMING)
+  format                        TutoringFormat    @default(ONE_TO_ONE)
   schedule                      Json?
   targetGroupSize               Int?
   groupFormationWindowExpiresAt DateTime?
@@ -430,8 +440,8 @@ model Cohort {
   studentDelayNotifiedAt        DateTime?
   endedAt                       DateTime?
   endedReason                   CohortEndReason?
-  createdAt                     DateTime         @default(now())
-  updatedAt                     DateTime         @updatedAt
+  createdAt                     DateTime          @default(now())
+  updatedAt                     DateTime          @updatedAt
 
   tutor             TutorProfile       @relation(fields: [tutorId], references: [id])
   subject           Subject            @relation(fields: [subjectId], references: [id])
@@ -458,30 +468,9 @@ model CohortMembership {
   cohort            Cohort                @relation(fields: [cohortId], references: [id])
   student           StudentProfile        @relation(fields: [studentId], references: [id])
   formatSwitches    FormatSwitchRequest[]
+  payments          Payment[]
+  paymentPauses     PaymentPause[]
   weeklyAssessments WeeklyAssessment[]
-}
-
-enum PaymentStatus {
-  PENDING
-  SUCCESS
-  FAILED
-}
-
-model Payment {
-  id                    String        @id @default(uuid())
-  cohortMembershipId    String
-  amount                Decimal
-  provider              String        @default("CHAPA")
-  providerTransactionId String?
-  status                PaymentStatus @default(PENDING)
-  billingPeriodStart    DateTime      @default(now())
-  billingPeriodEnd      DateTime      @default(now())
-  createdAt             DateTime      @default(now())
-  updatedAt             DateTime      @updatedAt
-
-  // We are not adding the strict relations for Payment in the stub
-  // since it connects to CohortMembership which might require inverse relations.
-  // We'll leave it as flat fields for the stub so Prisma validates the shape.
 }
 
 // ---- PHASE 3: MATCHING & COHORTS ----
@@ -564,11 +553,12 @@ model FormatSwitchRequest {
   student         StudentProfile   @relation(fields: [studentId], references: [id])
   fromMembership  CohortMembership @relation(fields: [fromMembershipId], references: [id])
   newMatchRequest MatchRequest?    @relation(fields: [newMatchRequestId], references: [id])
+  refund          Refund?          @relation(fields: [refundId], references: [id])
 }
 
 model PricingConfig {
   id                     String         @id @default(uuid())
-  format                 TutoringFormat @unique
+  format                 TutoringFormat
   pricePerStudentPerHour Decimal
   totalPerHour           Decimal
   platformSharePerHour   Decimal
@@ -622,6 +612,7 @@ enum MaterialFileType {
 }
 
 model ScheduledSession {
+  complaints         ComplaintReport[]
   id                 String                @id @default(uuid())
   cohortId           String
   scheduledStart     DateTime
@@ -642,6 +633,7 @@ model ScheduledSession {
   rescheduleRequests RescheduleRequest[]
   sessionMiss        SessionMiss?        @relation("MissedSession")
   recording          Recording?
+  tutorEarning       TutorEarning?
 }
 
 model RescheduleRequest {
@@ -868,4 +860,188 @@ model ChallengeProgress {
   challenge Challenge      @relation(fields: [challengeId], references: [id])
 
   @@unique([studentId, challengeId])
+}
+
+// ── Phase 7: Payments & Earnings ────────────────────────────────────────
+
+enum PaymentProvider {
+  CHAPA
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+enum PauseReason {
+  NONPAYMENT
+}
+
+enum RefundReason {
+  TUTOR_DROPOUT
+  PLATFORM_OUTAGE
+  FORMAT_SWITCH
+  SESSION_UNDELIVERED
+  ADMIN_DISPUTE_RESOLUTION
+}
+
+enum RefundStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum EarningRateType {
+  FULL
+  REDUCED_MAKEUP
+}
+
+enum PayoutStatus {
+  PENDING
+  PAID
+}
+
+enum DiscountType {
+  PERCENT
+  FIXED_ETB
+}
+
+model Payment {
+  complaints            ComplaintReport[]
+  id                    String            @id @default(uuid())
+  cohortMembershipId    String
+  amount                Decimal
+  provider              PaymentProvider   @default(CHAPA)
+  providerTransactionId String?
+  status                PaymentStatus     @default(PENDING)
+  billingPeriodStart    DateTime
+  billingPeriodEnd      DateTime
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+
+  cohortMembership CohortMembership @relation(fields: [cohortMembershipId], references: [id])
+  refunds          Refund[]
+}
+
+model PaymentPause {
+  id                 String      @id @default(uuid())
+  cohortMembershipId String
+  startedAt          DateTime    @default(now())
+  endedAt            DateTime?
+  reason             PauseReason @default(NONPAYMENT)
+
+  cohortMembership CohortMembership @relation(fields: [cohortMembershipId], references: [id])
+}
+
+model Refund {
+  id                  String       @id @default(uuid())
+  paymentId           String
+  reason              RefundReason
+  status              RefundStatus @default(PENDING)
+  sessionsRemaining   Int
+  totalSessionsBilled Int
+  amount              Decimal
+  approvedById        String?
+  approvedAt          DateTime?
+  rejectedById        String?
+  rejectedAt          DateTime?
+  rejectionReason     String?      @db.VarChar(500)
+  createdAt           DateTime     @default(now())
+
+  payment              Payment               @relation(fields: [paymentId], references: [id])
+  approvedBy           User?                 @relation("RefundApprovedBy", fields: [approvedById], references: [id])
+  rejectedBy           User?                 @relation("RefundRejectedBy", fields: [rejectedById], references: [id])
+  formatSwitchRequests FormatSwitchRequest[]
+}
+
+model TutorEarning {
+  id        String          @id @default(uuid())
+  tutorId   String
+  sessionId String          @unique
+  amount    Decimal
+  rateType  EarningRateType
+  payoutId  String?
+  createdAt DateTime        @default(now())
+
+  tutor   TutorProfile     @relation(fields: [tutorId], references: [id])
+  session ScheduledSession @relation(fields: [sessionId], references: [id])
+  payout  Payout?          @relation(fields: [payoutId], references: [id])
+  user    User?            @relation(fields: [userId], references: [id])
+  userId  String?
+}
+
+model Payout {
+  id          String       @id @default(uuid())
+  tutorId     String
+  periodStart DateTime
+  periodEnd   DateTime
+  totalAmount Decimal
+  status      PayoutStatus @default(PENDING)
+  paidAt      DateTime?
+  createdAt   DateTime     @default(now())
+
+  tutor    TutorProfile   @relation(fields: [tutorId], references: [id])
+  earnings TutorEarning[]
+  user     User?          @relation(fields: [userId], references: [id])
+  userId   String?
+}
+
+model PromotionCode {
+  id            String       @id @default(uuid())
+  code          String       @unique
+  discountType  DiscountType
+  discountValue Decimal
+  validFrom     DateTime
+  validTo       DateTime
+  isActive      Boolean      @default(true)
+  createdById   String
+  createdAt     DateTime     @default(now())
+
+  createdBy User @relation(fields: [createdById], references: [id])
+}
+
+enum ComplaintCategory {
+  SESSION_ISSUE
+  TUTOR_CONDUCT
+  PAYMENT_ISSUE
+  MESSAGE_ISSUE
+  OTHER
+}
+
+enum ComplaintStatus {
+  OPEN
+  UNDER_REVIEW
+  RESOLVED
+  DISMISSED
+}
+
+enum ResolutionAction {
+  NO_ACTION
+  WARNING_ISSUED
+  REFUND_ISSUED
+  TUTOR_SUSPENDED
+}
+
+model ComplaintReport {
+  id               String            @id @default(uuid())
+  reporterId       String
+  relatedCohortId  String?
+  relatedSessionId String?
+  relatedPaymentId String?
+  relatedThreadId  String?
+  category         ComplaintCategory
+  description      String
+  status           ComplaintStatus   @default(OPEN)
+  resolutionAction ResolutionAction?
+  resolutionNotes  String?
+  resolvedById     String?
+  resolvedAt       DateTime?
+  createdAt        DateTime          @default(now())
+
+  reporter   User              @relation("ComplaintReporter", fields: [reporterId], references: [id])
+  resolvedBy User?             @relation("ComplaintResolver", fields: [resolvedById], references: [id])
+  cohort     Cohort?           @relation(fields: [relatedCohortId], references: [id])
+  session    ScheduledSession? @relation(fields: [relatedSessionId], references: [id])
+  payment    Payment?          @relation(fields: [relatedPaymentId], references: [id])
 }

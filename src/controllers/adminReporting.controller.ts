@@ -1,23 +1,41 @@
-// STUB: auto-generated placeholder to satisfy TypeScript module resolution.
-// TODO: implement real logic.
-import type { Request, Response, NextFunction } from 'express';
-import asyncHandler from '../utils/asyncHandler.js';
-import ApiError from '../utils/ApiError.js';
+import { Request, Response, NextFunction } from 'express';
+import * as adminReportingService from '../services/adminReporting.service.js';
 
-export const getActivity = asyncHandler(
-  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    throw new ApiError(501, 'getActivity not implemented');
-  },
-);
+export const getStats = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await adminReportingService.aggregatePlatformHealth();
+    return res.status(200).json({ data: result });
+  } catch (err) {
+    next(err);
+  }
+};
 
-export const getStats = asyncHandler(
-  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    throw new ApiError(501, 'getStats not implemented');
-  },
-);
+export const getActivity = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { page, limit, dateRange } = req.query;
 
-export const getTutorPerformance = asyncHandler(
-  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    throw new ApiError(501, 'getTutorPerformance not implemented');
-  },
-);
+    const result = await adminReportingService.getActivityHistory(
+      page as string,
+      limit as string,
+      dateRange as string,
+    );
+    return res.status(200).json({ data: result });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const getTutorPerformance = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { tutorId, page, limit } = req.query;
+
+    const result = await adminReportingService.getTutorPerformanceHistory(
+      tutorId as string,
+      page as string,
+      limit as string,
+    );
+    return res.status(200).json({ data: result });
+  } catch (err) {
+    next(err);
+  }
+};

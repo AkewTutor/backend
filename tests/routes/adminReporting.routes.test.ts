@@ -26,7 +26,7 @@ vi.mock('../../src/utils/jwt.js', () => ({
 import * as adminReportingService from '../../src/services/adminReporting.service.js';
 import app from '../../src/app.js';
 
-describe.skip('adminReporting.routes.ts', () => {
+describe('adminReporting.routes.ts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (adminReportingService.aggregatePlatformHealth as any).mockResolvedValue({

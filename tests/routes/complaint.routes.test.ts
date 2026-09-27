@@ -27,7 +27,7 @@ vi.mock('../../src/utils/jwt.js', () => ({
 import * as complaintService from '../../src/services/complaint.service.js';
 import app from '../../src/app.js';
 
-describe.skip('complaint.routes.ts', () => {
+describe('complaint.routes.ts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (complaintService.createComplaint as any).mockResolvedValue({

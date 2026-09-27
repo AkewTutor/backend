@@ -12,7 +12,7 @@ import { describe, expect, it } from 'vitest';
 
 import { createComplaintSchema, resolveDisputeSchema } from '../../src/schemas/complaint.schema.js';
 
-describe.skip('createComplaintSchema', () => {
+describe('createComplaintSchema', () => {
   it('requires a related entity unless category is OTHER', () => {
     const result = createComplaintSchema.safeParse({
       body: {
@@ -66,7 +66,7 @@ describe.skip('createComplaintSchema', () => {
   });
 });
 
-describe.skip('resolveDisputeSchema', () => {
+describe('resolveDisputeSchema', () => {
   const uuid = '11111111-1111-1111-1111-111111111111';
 
   it('requires a resolutionAction when resolving', () => {

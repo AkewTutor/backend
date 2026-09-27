@@ -58,7 +58,7 @@ function resetMocks() {
   (prisma.payout.findMany as any).mockResolvedValue([]);
 }
 
-describe.skip('aggregatePlatformHealth', () => {
+describe('aggregatePlatformHealth', () => {
   beforeEach(resetMocks);
 
   it('aggregates counts across all owning features', async () => {
@@ -100,7 +100,7 @@ describe.skip('aggregatePlatformHealth', () => {
   });
 });
 
-describe.skip('getActivityHistory', () => {
+describe('getActivityHistory', () => {
   beforeEach(resetMocks);
 
   it('returns paginated activity across the documented source tables', async () => {
@@ -151,7 +151,7 @@ describe.skip('getActivityHistory', () => {
   });
 });
 
-describe.skip('getTutorPerformanceHistory', () => {
+describe('getTutorPerformanceHistory', () => {
   beforeEach(resetMocks);
 
   it('reads across features without owning the data', async () => {

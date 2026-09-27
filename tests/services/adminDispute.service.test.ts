@@ -76,7 +76,7 @@ function resetMocks() {
   (auditLogService.record as any).mockResolvedValue(undefined);
 }
 
-describe.skip('listDisputeQueue', () => {
+describe('listDisputeQueue', () => {
   beforeEach(resetMocks);
 
   it('lists queued complaints, filterable by status/category', async () => {
@@ -107,7 +107,7 @@ describe.skip('listDisputeQueue', () => {
   });
 });
 
-describe.skip('getDisputeForReview', () => {
+describe('getDisputeForReview', () => {
   beforeEach(resetMocks);
 
   it('returns full detail including linked references', async () => {
@@ -153,7 +153,7 @@ describe.skip('getDisputeForReview', () => {
   });
 });
 
-describe.skip('resolveDispute', () => {
+describe('resolveDispute', () => {
   beforeEach(resetMocks);
 
   it('dismisses a complaint', async () => {

@@ -26,7 +26,7 @@ vi.mock('../../src/utils/jwt.js', () => ({
 import * as adminDisputeService from '../../src/services/adminDispute.service.js';
 import app from '../../src/app.js';
 
-describe.skip('adminDispute.routes.ts', () => {
+describe('adminDispute.routes.ts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (adminDisputeService.listDisputeQueue as any).mockResolvedValue({

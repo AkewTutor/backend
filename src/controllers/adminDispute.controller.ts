@@ -1,23 +1,47 @@
-// STUB: auto-generated placeholder to satisfy TypeScript module resolution.
-// TODO: implement real logic.
-import type { Request, Response, NextFunction } from 'express';
-import asyncHandler from '../utils/asyncHandler.js';
+import { Request, Response, NextFunction } from 'express';
+import * as adminDisputeService from '../services/adminDispute.service.js';
 import ApiError from '../utils/ApiError.js';
 
-export const getDisputeDetail = asyncHandler(
-  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    throw new ApiError(501, 'getDisputeDetail not implemented');
-  },
-);
+export const listQueue = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { status, category, page, limit } = req.query;
 
-export const listQueue = asyncHandler(
-  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    throw new ApiError(501, 'listQueue not implemented');
-  },
-);
+    const parsedPage = page ? parseInt(page as string) : 1;
+    const parsedLimit = limit ? parseInt(limit as string) : 20;
 
-export const resolveDispute = asyncHandler(
-  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    throw new ApiError(501, 'resolveDispute not implemented');
-  },
-);
+    const result = await adminDisputeService.listDisputeQueue(
+      status as string,
+      category as string,
+      parsedPage,
+      parsedLimit,
+    );
+    return res.status(200).json({ data: result });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const getDisputeDetail = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { complaintId } = req.params;
+
+    const result = await adminDisputeService.getDisputeForReview(complaintId);
+    return res.status(200).json({ data: result });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const resolveDispute = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const user = (req as any).user;
+    if (!user) throw new ApiError(401, 'Unauthorized');
+
+    const { complaintId } = req.params;
+
+    const result = await adminDisputeService.resolveDispute(complaintId, user.id, req.body);
+    return res.status(200).json({ data: result });
+  } catch (err) {
+    next(err);
+  }
+};

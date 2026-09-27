@@ -76,7 +76,7 @@ function resetMocks() {
   (prisma.user.findFirst as any).mockResolvedValue({ id: 'admin-1', role: 'ADMIN' });
 }
 
-describe.skip('createComplaint', () => {
+describe('createComplaint', () => {
   beforeEach(resetMocks);
 
   it("files a complaint referencing the caller's own session", async () => {
@@ -260,7 +260,7 @@ describe.skip('createComplaint', () => {
   });
 });
 
-describe.skip('listForUser', () => {
+describe('listForUser', () => {
   beforeEach(resetMocks);
 
   it("lists the caller's own complaints, paginated", async () => {
@@ -308,7 +308,7 @@ describe.skip('listForUser', () => {
   });
 });
 
-describe.skip('getForReporter', () => {
+describe('getForReporter', () => {
   beforeEach(resetMocks);
 
   it("returns the reporter's own complaint", async () => {
@@ -369,7 +369,7 @@ describe.skip('getForReporter', () => {
   });
 });
 
-describe.skip('getSupportContactInfo', () => {
+describe('getSupportContactInfo', () => {
   beforeEach(resetMocks);
 
   it('is a static published read, the same regardless of caller', async () => {

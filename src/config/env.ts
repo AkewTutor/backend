@@ -36,6 +36,9 @@ const envSchema = z.object({
   // ── prisma/seed.ts ───────────────────────────────────────────────
   ADMIN_SEED_EMAIL: z.string(),
   ADMIN_SEED_PASSWORD: z.string(),
+  CHAPA_SECRET_KEY: z.string().default('dummy-chapa-secret'),
+  CHAPA_WEBHOOK_SECRET: z.string().default('dummy-chapa-webhook-secret'),
+  CHAPA_BASE_URL: z.string().default('https://api.chapa.co/v1'),
 });
 
 const parsed = envSchema.safeParse(process.env);

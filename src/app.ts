@@ -27,25 +27,35 @@ app.use((req, res, next) => {
 });
 
 // 🟢 3. Link Express Request IDs directly to Pino logs
-app.use((pinoHttp as any)({
-  logger,
-  genReqId: (req: IncomingMessage) => (req as any).id || randomUUID(),
-}));
+app.use(
+  (pinoHttp as any)({
+    logger,
+    genReqId: (req: IncomingMessage) => (req as any).id || randomUUID(),
+  }),
+);
 
 // 🛡️ Security Middlewares
 app.use(helmet());
 app.use(
   cors({
-    origin: env.NODE_ENV === 'production'
-      ? ['https://yourdomain.com', 'https://app.yourdomain.com']
-      : '*',
+    origin:
+      env.NODE_ENV === 'production'
+        ? ['https://yourdomain.com', 'https://app.yourdomain.com']
+        : '*',
     credentials: true,
-  })
+  }),
 );
 app.use(defaultLimiter);
 
 // 📦 Body Parsing Configurations
-app.use(express.json({ limit: '10kb' }));
+app.use(
+  express.json({
+    limit: '10kb',
+    verify: (req: any, res: any, buf: Buffer) => {
+      req.rawBody = buf;
+    },
+  }),
+);
 app.use(express.urlencoded({ extended: true, limit: '10kb' }));
 
 // 🚀 Core Application Routing Paths

@@ -28,6 +28,16 @@ import { libraryRouter, adminLibraryRouter } from './library.routes.js';
 import { gamificationXPRouter, adminXPRouter } from './xp.routes.js';
 import { gamificationBadgeRouter, adminBadgeRouter } from './badge.routes.js';
 import { gamificationChallengeRouter, adminChallengeRouter } from './challenge.routes.js';
+import paymentRouter from './payment.routes.js';
+import { pricingRouter, adminPricingRouter } from './pricing.routes.js';
+import { adminRefundRouter } from './refund.routes.js';
+import { adminPayoutRouter } from './payout.routes.js';
+import paymentPauseRouter from './paymentPause.routes.js';
+import { publicPromotionRouter, adminPromotionRouter } from './promotion.routes.js';
+import { adminDisputeRouter } from './adminDispute.routes.js';
+import { adminReportingRouter } from './adminReporting.routes.js';
+import earningRouter from './earning.routes.js';
+import { complaintRouter, supportRouter } from './complaint.routes.js';
 
 const router = Router();
 
@@ -73,4 +83,18 @@ router.use('/admin/badges', adminBadgeRouter);
 router.use('/gamification/challenges', gamificationChallengeRouter);
 router.use('/admin/challenges', adminChallengeRouter);
 
+// ── payments-earnings ─────────────────────────────────────────────
+router.use('/payments', paymentRouter);
+router.use('/payment-pause', paymentPauseRouter);
+router.use('/promotions', publicPromotionRouter);
+router.use('/pricing', pricingRouter);
+router.use('/admin/pricing', adminPricingRouter);
+router.use('/admin/refunds', adminRefundRouter);
+router.use('/admin/promotions', adminPromotionRouter);
+router.use('/admin/payouts', adminPayoutRouter);
+router.use('/admin/disputes', adminDisputeRouter);
+router.use('/admin/reports', adminReportingRouter);
+router.use('/tutors', earningRouter);
+router.use('/complaints', complaintRouter);
+router.use('/support', supportRouter);
 export default router;
