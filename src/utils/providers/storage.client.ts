@@ -1,12 +1,20 @@
 import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl as presignUrl } from '@aws-sdk/s3-request-presigner';
 
+function resolveRegion(): string {
+  if (process.env.STORAGE_REGION) return process.env.STORAGE_REGION;
+  // Backblaze B2 endpoints look like https://s3.us-west-004.backblazeb2.com
+  const m = process.env.STORAGE_ENDPOINT?.match(/^https?:\/\/s3\.([^.]+)\./);
+  return m?.[1] ?? 'us-east-1';
+}
+
 const s3Client = new S3Client({
-  region: process.env.CLOUDFLARE_R2_REGION || 'auto',
-  endpoint: process.env.CLOUDFLARE_R2_ENDPOINT,
+  region: resolveRegion(),
+  endpoint: process.env.STORAGE_ENDPOINT,
+  forcePathStyle: true,
   credentials: {
-    accessKeyId: process.env.CLOUDFLARE_R2_ACCESS_KEY_ID || '',
-    secretAccessKey: process.env.CLOUDFLARE_R2_SECRET_KEY || '',
+    accessKeyId: process.env.STORAGE_ACCESS_KEY_ID || '',
+    secretAccessKey: process.env.STORAGE_SECRET_ACCESS_KEY || '',
   },
 });
 
@@ -15,7 +23,7 @@ export async function upload(key: string, body: Buffer, contentType: string) {
   const sanitizedKey = key.replace(/\.\.\//g, '').replace(/^\/+/, '');
 
   const command = new PutObjectCommand({
-    Bucket: process.env.CLOUDFLARE_R2_BUCKET || 'akewtutor',
+    Bucket: process.env.STORAGE_BUCKET || 'akewtutor',
     Key: sanitizedKey,
     Body: body,
     ContentType: contentType,
@@ -29,7 +37,7 @@ export async function upload(key: string, body: Buffer, contentType: string) {
 export async function getSignedUrl(key: string, expiresIn: number) {
   const sanitizedKey = key.replace(/\.\.\//g, '').replace(/^\/+/, '');
   const command = new GetObjectCommand({
-    Bucket: process.env.CLOUDFLARE_R2_BUCKET || 'akewtutor',
+    Bucket: process.env.STORAGE_BUCKET || 'akewtutor',
     Key: sanitizedKey,
   });
 

@@ -101,7 +101,7 @@ describe('getSignedUrl', () => {
 
     await getSignedUrl('recordings/2026/09/key.mp4', 900);
 
-    const secret = process.env.CLOUDFLARE_R2_SECRET_KEY ?? 'test-r2-secret';
+    const secret = process.env.STORAGE_SECRET_ACCESS_KEY ?? 'test-r2-secret';
     const allLoggedText = [...logSpy.mock.calls, ...errorSpy.mock.calls].flat().join(' ');
     expect(allLoggedText).not.toContain(secret);
 

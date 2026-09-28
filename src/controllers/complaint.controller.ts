@@ -41,7 +41,7 @@ export const getMyComplaint = async (req: Request, res: Response, next: NextFunc
     const user = (req as any).user;
     if (!user) throw new ApiError(401, 'Unauthorized');
 
-    const { complaintId } = req.params;
+    const complaintId = String(req.params.complaintId);
 
     const result = await complaintService.getForReporter(user.id, complaintId);
     return res.status(200).json({ data: result });

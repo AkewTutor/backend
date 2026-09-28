@@ -23,7 +23,7 @@ export const listQueue = async (req: Request, res: Response, next: NextFunction)
 
 export const getDisputeDetail = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { complaintId } = req.params;
+    const complaintId = String(req.params.complaintId);
 
     const result = await adminDisputeService.getDisputeForReview(complaintId);
     return res.status(200).json({ data: result });
@@ -37,7 +37,7 @@ export const resolveDispute = async (req: Request, res: Response, next: NextFunc
     const user = (req as any).user;
     if (!user) throw new ApiError(401, 'Unauthorized');
 
-    const { complaintId } = req.params;
+    const complaintId = String(req.params.complaintId);
 
     const result = await adminDisputeService.resolveDispute(complaintId, user.id, req.body);
     return res.status(200).json({ data: result });

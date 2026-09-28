@@ -698,6 +698,7 @@ model LibraryMaterial {
   fileUrl           String
   fileType          MaterialFileType
   createdAt         DateTime         @default(now())
+  removedAt         DateTime?
 
   cohort     Cohort       @relation(fields: [cohortId], references: [id])
   uploadedBy TutorProfile @relation(fields: [uploadedByTutorId], references: [id])

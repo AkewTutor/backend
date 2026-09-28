@@ -43,6 +43,10 @@ export const defaultLimiter = rateLimit({
   max: 100,
   standardHeaders: true,
   legacyHeaders: false,
+  // The global cap is off in local development so Postman/Newman runs (hundreds of
+  // requests) aren't blocked. Test and production keep it. Route-specific limiters
+  // (login, forgot password, messaging...) are separate and stay on everywhere.
+  skip: () => process.env.NODE_ENV === 'development',
   // 🟢 Intercept the limitation event and route it through your design system
   handler: (req, res) => {
     return res

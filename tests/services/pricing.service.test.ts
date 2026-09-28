@@ -96,25 +96,33 @@ describe('createAndActivateConfig', () => {
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
-  it('deactivates the old config and activates the new one atomically — a single prisma.$transaction call', async () => {
-    const existingActive = buildPricingConfig({
-      createdById: 'admin-old',
-      format: 'ONE_TO_ONE',
-      isActive: true,
-    });
-    (prisma.pricingConfig.findFirst as any).mockResolvedValue(existingActive);
+  it('deactivates the old config and activates the new one atomically — one interactive prisma.$transaction, per-format lock first', async () => {
+    const calls: string[] = [];
     const newConfig = buildPricingConfig({
       createdById: 'admin-1',
       format: 'ONE_TO_ONE',
       isActive: true,
       pricePerStudentPerHour: '375.00',
     });
-    (prisma.$transaction as any).mockResolvedValue([
-      { ...existingActive, isActive: false },
-      newConfig,
-    ]);
+    const tx = {
+      $executeRaw: vi.fn().mockImplementation(async () => {
+        calls.push('lock');
+        return 1;
+      }),
+      pricingConfig: {
+        updateMany: vi.fn().mockImplementation(async () => {
+          calls.push('deactivate');
+          return { count: 1 };
+        }),
+        create: vi.fn().mockImplementation(async () => {
+          calls.push('create');
+          return newConfig;
+        }),
+      },
+    };
+    (prisma.$transaction as any).mockImplementation(async (fn: any) => fn(tx));
 
-    await createAndActivateConfig(
+    const result = await createAndActivateConfig(
       'ONE_TO_ONE',
       {
         pricePerStudentPerHour: '375.00',
@@ -125,10 +133,25 @@ describe('createAndActivateConfig', () => {
       'admin-1',
     );
 
+    // A single interactive transaction (callback form), so the lock, the deactivation and
+    // the creation all share one database transaction.
     expect(prisma.$transaction).toHaveBeenCalledTimes(1);
-    const transactionArg = (prisma.$transaction as any).mock.calls[0][0];
-    expect(Array.isArray(transactionArg)).toBe(true);
-    expect(transactionArg.length).toBeGreaterThanOrEqual(2);
+    expect(typeof (prisma.$transaction as any).mock.calls[0][0]).toBe('function');
+
+    // Order matters: lock the format, deactivate the old active row(s), then create the new one.
+    expect(calls).toEqual(['lock', 'deactivate', 'create']);
+    expect(tx.pricingConfig.updateMany).toHaveBeenCalledWith({
+      where: { format: 'ONE_TO_ONE', isActive: true },
+      data: { isActive: false },
+    });
+    expect(tx.pricingConfig.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        format: 'ONE_TO_ONE',
+        isActive: true,
+        createdById: 'admin-1',
+      }),
+    });
+    expect(result).toBe(newConfig);
   });
 
   it('the change applies to the next new booking only — a prior Payment.amount is never retroactively altered', async () => {

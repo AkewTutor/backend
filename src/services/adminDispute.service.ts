@@ -75,14 +75,29 @@ export async function resolveDispute(
     const refund = await refundService.createPendingRefund(payment.id, 'ADMIN_DISPUTE_RESOLUTION');
     await refundService.approveRefund(refund.id, adminId);
   } else if (data.resolutionAction === 'TUTOR_SUSPENDED') {
-    let tutorId = undefined;
-    if (complaint.cohort) tutorId = complaint.cohort.tutorId;
-    else if (complaint.session) tutorId = complaint.session.cohort.tutorId;
+    // Resolve the tutor from the complaint's own links only. Never guess: suspending the
+    // wrong account is far worse than refusing the action.
+    const tutorProfileId = complaint.cohort?.tutorId ?? complaint.session?.cohort?.tutorId;
+    if (!tutorProfileId) {
+      throw new ApiError(
+        400,
+        'Cannot suspend a tutor: this complaint is not linked to a cohort or session with an identifiable tutor',
+      );
+    }
 
-    // Fallback if the test mocked it without cohort (which the test seems to do)
-    if (!tutorId) tutorId = 'tutor-1'; // Temporary workaround for the test if it doesn't mock the relations
+    // Cohort.tutorId is a TutorProfile id; suspendAccount works on the User id.
+    const tutorProfile = await prisma.tutorProfile.findUnique({
+      where: { id: tutorProfileId },
+      select: { userId: true },
+    });
+    if (!tutorProfile) throw new ApiError(404, 'Tutor not found');
 
-    await adminPeopleService.suspendAccount(tutorId, 'Suspended due to complaint resolution');
+    await adminPeopleService.suspendAccount(
+      tutorProfile.userId,
+      adminId,
+      `Suspended due to complaint resolution (complaint ${complaintId})`,
+      'SUSPENDED',
+    );
   }
 
   const updated = await prisma.complaintReport.update({

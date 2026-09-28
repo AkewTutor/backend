@@ -33,6 +33,7 @@ vi.mock('../../src/config/db.js', () => ({
       update: vi.fn(),
     },
     payment: { findFirst: vi.fn() },
+    tutorProfile: { findUnique: vi.fn() },
   },
 }));
 
@@ -360,10 +361,12 @@ describe('resolveDispute', () => {
         description: 'x'.repeat(20),
         status: 'UNDER_REVIEW',
         relatedCohortId: 'cohort-1',
+        cohort: { id: 'cohort-1', tutorId: 'tutor-profile-1' },
       }),
     );
+    (prisma.tutorProfile.findUnique as any).mockResolvedValue({ userId: 'tutor-user-1' });
     (adminPeopleService.suspendAccount as any).mockResolvedValue({
-      userId: 'tutor-1',
+      userId: 'tutor-user-1',
       accountStatus: 'SUSPENDED',
     });
     (prisma.complaintReport.update as any).mockResolvedValue(
@@ -385,6 +388,35 @@ describe('resolveDispute', () => {
     });
 
     expect(adminPeopleService.suspendAccount).toHaveBeenCalledTimes(1);
+    // The tutor's USER id (not the profile id), the acting admin, a reason, and the restriction type.
+    expect(adminPeopleService.suspendAccount).toHaveBeenCalledWith(
+      'tutor-user-1',
+      ADMIN_ID,
+      expect.stringContaining(COMPLAINT_ID),
+      'SUSPENDED',
+    );
+  });
+
+  it('TUTOR_SUSPENDED is rejected — and nobody is suspended — when the complaint has no identifiable tutor', async () => {
+    (prisma.complaintReport.findUnique as any).mockResolvedValue(
+      buildComplaintReport({
+        reporterId: 'reporter-1',
+        category: 'OTHER',
+        description: 'x'.repeat(20),
+        status: 'UNDER_REVIEW',
+      }),
+    );
+
+    await expect(
+      resolveDispute(COMPLAINT_ID, ADMIN_ID, {
+        status: 'RESOLVED',
+        resolutionAction: 'TUTOR_SUSPENDED',
+        resolutionNotes: 'no tutor linked',
+      }),
+    ).rejects.toMatchObject({ statusCode: 400 });
+
+    expect(adminPeopleService.suspendAccount).not.toHaveBeenCalled();
+    expect(prisma.complaintReport.update).not.toHaveBeenCalled();
   });
 
   it('a re-matching resolution is never modeled here — the enum has no RE_MATCH-style value', () => {
@@ -525,10 +557,12 @@ describe('resolveDispute', () => {
         description: 'x'.repeat(20),
         status: 'UNDER_REVIEW',
         relatedCohortId: 'cohort-1',
+        cohort: { id: 'cohort-1', tutorId: 'tutor-profile-1' },
       }),
     );
+    (prisma.tutorProfile.findUnique as any).mockResolvedValue({ userId: 'tutor-user-1' });
     (adminPeopleService.suspendAccount as any).mockResolvedValue({
-      userId: 'tutor-1',
+      userId: 'tutor-user-1',
       accountStatus: 'SUSPENDED',
     });
     (prisma.complaintReport.update as any).mockResolvedValue(

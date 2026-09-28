@@ -30,6 +30,7 @@ vi.mock('../../src/config/db.js', () => ({
     tutorProfile: { findMany: vi.fn(), count: vi.fn() },
     refund: { count: vi.fn(), findMany: vi.fn() },
     tutorBadge: { count: vi.fn(), findMany: vi.fn(), groupBy: vi.fn() },
+    cohortMembership: { groupBy: vi.fn() },
   },
 }));
 
@@ -50,6 +51,7 @@ function resetMocks() {
   (prisma.payment.count as any).mockResolvedValue(0);
   (prisma.refund.count as any).mockResolvedValue(0);
   (prisma.tutorBadge.count as any).mockResolvedValue(0);
+  (prisma.cohortMembership.groupBy as any).mockResolvedValue([]);
   (prisma.complaintReport.findMany as any).mockResolvedValue([]);
   (prisma.cohort.findMany as any).mockResolvedValue([]);
   (prisma.payment.findMany as any).mockResolvedValue([]);
@@ -160,12 +162,14 @@ describe('getTutorPerformanceHistory', () => {
         id: 'tutor-1',
         userId: 'user-tutor-1',
         verificationStatus: 'VERIFIED',
-        uniqueStudentsTaught: 14,
         createdAt: new Date('2026-01-10'),
       },
     ]);
     (prisma.scheduledSession.count as any).mockResolvedValue(210);
     (prisma.sessionMiss.count as any).mockResolvedValue(2);
+    (prisma.cohortMembership.groupBy as any).mockResolvedValue(
+      Array.from({ length: 14 }, (_, i) => ({ studentId: `s-${i}` })),
+    );
     (prisma.tutorBadge.count as any).mockResolvedValue(5);
     (prisma.complaintReport.count as any).mockResolvedValue(1);
 
@@ -206,7 +210,6 @@ describe('getTutorPerformanceHistory', () => {
         id: 'tutor-1',
         userId: 'user-tutor-1',
         verificationStatus: 'VERIFIED',
-        uniqueStudentsTaught: 5,
         createdAt: new Date(),
       },
     ]);

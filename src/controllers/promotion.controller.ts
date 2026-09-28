@@ -28,7 +28,7 @@ export const adminEdit = async (req: Request, res: Response, next: NextFunction)
     const adminId = (req as any).user?.id;
     if (!adminId) throw new ApiError(401, 'Unauthorized');
 
-    const result = await promotionService.updatePromotion(req.params.id, req.body);
+    const result = await promotionService.updatePromotion(String(req.params.id), req.body);
     return res.status(200).json({ data: result });
   } catch (err) {
     next(err);

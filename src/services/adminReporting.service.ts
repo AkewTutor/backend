@@ -102,19 +102,25 @@ export async function getTutorPerformanceHistory(
         where: { cohort: { tutorId: p.id }, status: 'COMPLETED' },
       });
       const tutorCausedMissCount = await prisma.sessionMiss.count({
-        where: { scheduledSession: { cohort: { tutorId: p.id } } },
+        where: { session: { cohort: { tutorId: p.id } } },
       });
+      const uniqueStudentsTaught = (
+        await prisma.cohortMembership.groupBy({
+          by: ['studentId'],
+          where: { cohort: { tutorId: p.id } },
+        })
+      ).length;
       const badgeCount = await prisma.tutorBadge.count({
         where: { tutorId: p.id },
       });
       const complaintCount = await prisma.complaintReport.count({
-        where: { relatedCohortId: p.id },
+        where: { cohort: { tutorId: p.id } },
       });
 
       return {
         tutorId: p.id,
         verificationStatus: p.verificationStatus,
-        uniqueStudentsTaught: p.uniqueStudentsTaught,
+        uniqueStudentsTaught,
         completedSessionCount,
         tutorCausedMissCount,
         badgeCount,
