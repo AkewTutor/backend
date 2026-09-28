@@ -81,7 +81,7 @@ async function main() {
     ];
 
     for (const config of formats) {
-      const existingConfig = await prisma.pricingConfig.findUnique({
+      const existingConfig = await prisma.pricingConfig.findFirst({
         where: { format: config.format as any },
       });
       if (!existingConfig) {

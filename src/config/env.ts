@@ -12,6 +12,7 @@ const envSchema = z.object({
   // NFR-014 — 30-minute access-token TTL (Doc 05a §9).
   JWT_EXPIRES_IN: z.string().default('30m'),
   BCRYPT_SALT_ROUNDS: z.string().default('10'),
+  CLIENT_URL: z.string().default('http://localhost:3000'),
 
   // ── shared-config ────────────────────────────────────────────────
   // Both provider base URLs are declared here even though Doc 05a §9's

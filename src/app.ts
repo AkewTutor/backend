@@ -38,10 +38,7 @@ app.use(
 app.use(helmet());
 app.use(
   cors({
-    origin:
-      env.NODE_ENV === 'production'
-        ? ['https://yourdomain.com', 'https://app.yourdomain.com']
-        : '*',
+    origin: env.NODE_ENV === 'production' ? env.CLIENT_URL.split(',') : '*',
     credentials: true,
   }),
 );
