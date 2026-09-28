@@ -26,22 +26,17 @@ export async function createAndActivateConfig(
     throw new ApiError(400, 'Platform and tutor shares must sum to the total per hour');
   }
 
-  const existingActive = await prisma.pricingConfig.findFirst({
-    where: { format: format as TutoringFormat, isActive: true },
-  });
+  // Serialize concurrent activations per format: the advisory lock is held until the
+  // transaction ends, so a second admin waits, then deactivates the first admin's row.
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'pricing:' + format}))`;
 
-  const txs = [];
-  if (existingActive) {
-    txs.push(
-      prisma.pricingConfig.update({
-        where: { id: existingActive.id },
-        data: { isActive: false },
-      }),
-    );
-  }
+    await tx.pricingConfig.updateMany({
+      where: { format: format as TutoringFormat, isActive: true },
+      data: { isActive: false },
+    });
 
-  txs.push(
-    prisma.pricingConfig.create({
+    return tx.pricingConfig.create({
       data: {
         format: format as TutoringFormat,
         pricePerStudentPerHour: payload.pricePerStudentPerHour,
@@ -51,9 +46,6 @@ export async function createAndActivateConfig(
         isActive: true,
         createdById: adminId,
       },
-    }),
-  );
-
-  const results = await prisma.$transaction(txs);
-  return results[results.length - 1]; // Return the newly created config
+    });
+  });
 }
