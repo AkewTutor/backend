@@ -15,7 +15,9 @@ export const getPauseStatus = async (req: Request, res: Response, next: NextFunc
     });
 
     if (!pause) {
-      return res.status(200).json({ data: { isPaused: false } });
+      return res
+        .status(200)
+        .json({ statusCode: 200, success: true, message: 'OK', data: { isPaused: false } });
     }
 
     const sessions = await prisma.scheduledSession.findMany({
@@ -27,6 +29,9 @@ export const getPauseStatus = async (req: Request, res: Response, next: NextFunc
     });
 
     return res.status(200).json({
+      statusCode: 200,
+      success: true,
+      message: 'OK',
       data: {
         isPaused: true,
         reason: pause.reason,

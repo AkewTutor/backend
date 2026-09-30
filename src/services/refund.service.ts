@@ -69,7 +69,11 @@ export async function approveRefund(refundId: string, adminId: string) {
     throw new ApiError(409, 'This refund has already been actioned');
   }
 
-  if ((refund as any)._policyQualifies === false) {
+  // Policy (Section 03 / 13): a refund is owed only for sessions actually
+  // undelivered. Derived from stored data, so nothing is left to undelivered
+  // means the case does not qualify.
+  const qualifies = refund.sessionsRemaining > 0 && Number(refund.amount) > 0;
+  if (!qualifies) {
     throw new ApiError(409, 'This case does not meet the refund policy conditions');
   }
 

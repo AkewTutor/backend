@@ -15,7 +15,7 @@ export const listQueue = async (req: Request, res: Response, next: NextFunction)
       parsedPage,
       parsedLimit,
     );
-    return res.status(200).json({ data: result });
+    return res.status(200).json({ statusCode: 200, success: true, message: 'OK', data: result });
   } catch (err) {
     next(err);
   }
@@ -26,7 +26,7 @@ export const getDisputeDetail = async (req: Request, res: Response, next: NextFu
     const complaintId = String(req.params.complaintId);
 
     const result = await adminDisputeService.getDisputeForReview(complaintId);
-    return res.status(200).json({ data: result });
+    return res.status(200).json({ statusCode: 200, success: true, message: 'OK', data: result });
   } catch (err) {
     next(err);
   }
@@ -40,7 +40,7 @@ export const resolveDispute = async (req: Request, res: Response, next: NextFunc
     const complaintId = String(req.params.complaintId);
 
     const result = await adminDisputeService.resolveDispute(complaintId, user.id, req.body);
-    return res.status(200).json({ data: result });
+    return res.status(200).json({ statusCode: 200, success: true, message: 'OK', data: result });
   } catch (err) {
     next(err);
   }

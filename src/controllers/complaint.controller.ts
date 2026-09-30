@@ -8,7 +8,9 @@ export const fileComplaint = async (req: Request, res: Response, next: NextFunct
     if (!user) throw new ApiError(401, 'Unauthorized');
 
     const result = await complaintService.createComplaint(user.id, user.role, req.body);
-    return res.status(201).json({ data: result });
+    return res
+      .status(201)
+      .json({ statusCode: 201, success: true, message: 'Created', data: result });
   } catch (err) {
     next(err);
   }
@@ -30,7 +32,7 @@ export const listMyComplaints = async (req: Request, res: Response, next: NextFu
       parsedPage,
       parsedLimit,
     );
-    return res.status(200).json({ data: result });
+    return res.status(200).json({ statusCode: 200, success: true, message: 'OK', data: result });
   } catch (err) {
     next(err);
   }
@@ -44,7 +46,7 @@ export const getMyComplaint = async (req: Request, res: Response, next: NextFunc
     const complaintId = String(req.params.complaintId);
 
     const result = await complaintService.getForReporter(user.id, complaintId);
-    return res.status(200).json({ data: result });
+    return res.status(200).json({ statusCode: 200, success: true, message: 'OK', data: result });
   } catch (err) {
     next(err);
   }
@@ -53,7 +55,7 @@ export const getMyComplaint = async (req: Request, res: Response, next: NextFunc
 export const getSupportContact = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const result = await complaintService.getSupportContactInfo();
-    return res.status(200).json({ data: result });
+    return res.status(200).json({ statusCode: 200, success: true, message: 'OK', data: result });
   } catch (err) {
     next(err);
   }

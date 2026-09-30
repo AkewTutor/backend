@@ -284,22 +284,15 @@ describe('approveRefund', () => {
     expect(result.approvedAt).toBeTruthy();
   });
 
-  it('rejects (throws) a non-qualifying case — student-caused disruption does not meet policy conditions', async () => {
+  it('rejects (throws) a non-qualifying case: no undelivered sessions means no refund owed', async () => {
     const nonQualifyingRefund = buildRefund({
       paymentId: 'payment-2',
       reason: 'SESSION_UNDELIVERED',
-      sessionsRemaining: 1,
+      sessionsRemaining: 0,
       totalSessionsBilled: 8,
-      amount: '43.75',
+      amount: '0.00',
     });
-    (prisma.refund.findUnique as any).mockResolvedValue({
-      ...nonQualifyingRefund,
-      // A hint the service layer's policy check reads, e.g. a disqualifying
-      // marker on the underlying case — exact field name is an internal
-      // policy-evaluation detail; this suite exercises the documented
-      // externally-visible outcome (409, standard message) regardless.
-      _policyQualifies: false,
-    } as any);
+    (prisma.refund.findUnique as any).mockResolvedValue(nonQualifyingRefund as any);
 
     await expect(approveRefund(nonQualifyingRefund.id, 'admin-1')).rejects.toMatchObject({
       statusCode: 409,

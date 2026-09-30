@@ -13,7 +13,7 @@ export const adminList = async (req: Request, res: Response, next: NextFunction)
     if (limit) filters.limit = parseInt(limit as string);
 
     const result = await payoutService.listPayouts(filters);
-    return res.status(200).json({ data: result });
+    return res.status(200).json({ statusCode: 200, success: true, message: 'OK', data: result });
   } catch (err) {
     next(err);
   }
@@ -27,7 +27,7 @@ export const adminMarkPaid = async (req: Request, res: Response, next: NextFunct
     const payoutId = req.params.payoutId as string;
 
     const result = await payoutService.markPaid(payoutId, adminId);
-    return res.status(200).json({ data: result });
+    return res.status(200).json({ statusCode: 200, success: true, message: 'OK', data: result });
   } catch (err) {
     next(err);
   }

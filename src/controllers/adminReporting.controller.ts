@@ -4,7 +4,7 @@ import * as adminReportingService from '../services/adminReporting.service.js';
 export const getStats = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const result = await adminReportingService.aggregatePlatformHealth();
-    return res.status(200).json({ data: result });
+    return res.status(200).json({ statusCode: 200, success: true, message: 'OK', data: result });
   } catch (err) {
     next(err);
   }
@@ -19,7 +19,7 @@ export const getActivity = async (req: Request, res: Response, next: NextFunctio
       limit as string,
       dateRange as string,
     );
-    return res.status(200).json({ data: result });
+    return res.status(200).json({ statusCode: 200, success: true, message: 'OK', data: result });
   } catch (err) {
     next(err);
   }
@@ -34,7 +34,7 @@ export const getTutorPerformance = async (req: Request, res: Response, next: Nex
       page as string,
       limit as string,
     );
-    return res.status(200).json({ data: result });
+    return res.status(200).json({ statusCode: 200, success: true, message: 'OK', data: result });
   } catch (err) {
     next(err);
   }

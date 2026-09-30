@@ -18,12 +18,18 @@ export async function createComplaint(
   if (data.relatedSessionId) {
     const session = await prisma.scheduledSession.findUnique({
       where: { id: data.relatedSessionId },
-      include: { cohort: { include: { memberships: true } } },
+      include: {
+        cohort: { include: { memberships: { include: { student: true } }, tutor: true } },
+      },
     });
     if (!session) throw new ApiError(404, 'Session not found');
 
-    const isMember = session.cohort.memberships.some((m) => m.studentId === reporterId);
-    if (!isMember && session.cohort.tutorId !== reporterId && reporterRole !== 'ADMIN') {
+    const isMember = session.cohort.memberships.some(
+      (m) => m.studentId === reporterId || (m as any).student?.userId === reporterId,
+    );
+    const isTutor =
+      session.cohort.tutorId === reporterId || (session.cohort as any).tutor?.userId === reporterId;
+    if (!isMember && !isTutor && reporterRole !== 'ADMIN') {
       throw new ApiError(
         403,
         'You can only file a complaint about your own sessions, payments, or cohorts',
@@ -37,12 +43,15 @@ export async function createComplaint(
   } else if (data.relatedCohortId) {
     const cohort = await prisma.cohort.findUnique({
       where: { id: data.relatedCohortId },
-      include: { memberships: true },
+      include: { memberships: { include: { student: true } }, tutor: true },
     });
     if (!cohort) throw new ApiError(404, 'Cohort not found');
 
-    const isMember = cohort.memberships.some((m) => m.studentId === reporterId);
-    if (!isMember && cohort.tutorId !== reporterId && reporterRole !== 'ADMIN') {
+    const isMember = cohort.memberships.some(
+      (m) => m.studentId === reporterId || (m as any).student?.userId === reporterId,
+    );
+    const isTutor = cohort.tutorId === reporterId || (cohort as any).tutor?.userId === reporterId;
+    if (!isMember && !isTutor && reporterRole !== 'ADMIN') {
       throw new ApiError(
         403,
         'You can only file a complaint about your own sessions, payments, or cohorts',
@@ -56,11 +65,14 @@ export async function createComplaint(
   } else if (data.relatedPaymentId) {
     const payment = await prisma.payment.findUnique({
       where: { id: data.relatedPaymentId },
-      include: { cohortMembership: true },
+      include: { cohortMembership: { include: { student: true } } },
     });
     if (!payment) throw new ApiError(404, 'Payment not found');
 
-    if (payment.cohortMembership.studentId !== reporterId && reporterRole !== 'ADMIN') {
+    const ownsPayment =
+      payment.cohortMembership.studentId === reporterId ||
+      (payment.cohortMembership as any).student?.userId === reporterId;
+    if (!ownsPayment && reporterRole !== 'ADMIN') {
       throw new ApiError(
         403,
         'You can only file a complaint about your own sessions, payments, or cohorts',

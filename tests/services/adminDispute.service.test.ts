@@ -38,6 +38,7 @@ vi.mock('../../src/config/db.js', () => ({
 }));
 
 vi.mock('../../src/services/refund.service.js', () => ({
+  calculateProration: vi.fn(),
   createPendingRefund: vi.fn(),
   approveRefund: vi.fn(),
 }));
@@ -73,6 +74,11 @@ const MEMBERSHIP_ID = 'membership-1';
 
 function resetMocks() {
   vi.clearAllMocks();
+  (refundService.calculateProration as any).mockResolvedValue({
+    amount: '50.00',
+    sessionsRemaining: 4,
+    totalSessionsBilled: 8,
+  });
   (dispatchNotification as any).mockResolvedValue(undefined);
   (auditLogService.record as any).mockResolvedValue(undefined);
 }
@@ -275,6 +281,39 @@ describe('resolveDispute', () => {
       'ADMIN_DISPUTE_RESOLUTION',
     );
     expect(refundService.approveRefund).toHaveBeenCalledWith('refund-1', ADMIN_ID);
+  });
+
+  it('REFUND_ISSUED with nothing undelivered throws 400 and creates no refund', async () => {
+    (prisma.complaintReport.findUnique as any).mockResolvedValue(
+      buildComplaintReport({
+        reporterId: 'reporter-1',
+        category: 'SESSION_ISSUE',
+        description: 'x'.repeat(20),
+        status: 'UNDER_REVIEW',
+      }),
+    );
+    (prisma.payment.findFirst as any).mockResolvedValue({
+      id: 'payment-1',
+      cohortMembershipId: MEMBERSHIP_ID,
+      status: 'SUCCESS',
+    });
+    (refundService.calculateProration as any).mockResolvedValue({
+      amount: '0.00',
+      sessionsRemaining: 0,
+      totalSessionsBilled: 8,
+    });
+
+    await expect(
+      resolveDispute(COMPLAINT_ID, ADMIN_ID, {
+        status: 'RESOLVED',
+        resolutionAction: 'REFUND_ISSUED',
+        affectedCohortMembershipId: MEMBERSHIP_ID,
+        resolutionNotes: 'nothing undelivered',
+      }),
+    ).rejects.toMatchObject({ statusCode: 400 });
+
+    expect(refundService.createPendingRefund).not.toHaveBeenCalled();
+    expect(refundService.approveRefund).not.toHaveBeenCalled();
   });
 
   it('REFUND_ISSUED ends the Refund at status APPROVED rather than being left PENDING', async () => {

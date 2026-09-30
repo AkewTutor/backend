@@ -72,6 +72,19 @@ export async function resolveDispute(
       );
     }
 
+    // Check first, so a non-qualifying case fails cleanly instead of leaving an
+    // orphan PENDING refund behind when approval is rejected.
+    const proration = await refundService.calculateProration(
+      payment.id,
+      'ADMIN_DISPUTE_RESOLUTION',
+    );
+    if (proration.sessionsRemaining <= 0 || Number(proration.amount) <= 0) {
+      throw new ApiError(
+        400,
+        'No undelivered sessions in the current billing cycle, so there is nothing to refund',
+      );
+    }
+
     const refund = await refundService.createPendingRefund(payment.id, 'ADMIN_DISPUTE_RESOLUTION');
     await refundService.approveRefund(refund.id, adminId);
   } else if (data.resolutionAction === 'TUTOR_SUSPENDED') {

@@ -372,6 +372,130 @@ try {
     )
   ).id;
 
+  // ── Payments, refunds, payouts, disputes & promotions (collection 06) ──
+  step('Payments & earnings fixtures (06): payable membership, refunds, payouts, complaints, promotion');
+  out.chapaWebhookSecret = process.env.CHAPA_WEBHOOK_SECRET || envGet('chapaWebhookSecret');
+
+  // A dedicated guarded student (ACTIVE guardianship with the MAIN parent) so
+  // parentToken may pay for it while otherParentToken may not (403). Fresh user,
+  // so no other collection's expectations are touched.
+  const relE = await addKid(3, 'kid-pay');
+  const tokenE = (
+    await one('select "inviteToken" from "ParentStudentRelationship" where id = $1', [
+      relE.relationshipId,
+    ])
+  ).inviteToken;
+  await api('POST', `/guardianship/invites/${tokenE}/activate`, { body: { password: DEFAULT_PW } });
+  const payStudentProfileId = (
+    await one('select "studentId" from "ParentStudentRelationship" where id = $1', [
+      relE.relationshipId,
+    ])
+  ).studentId;
+
+  const payTutor = out.alreadyReviewedTutorId; // approved TutorProfile id
+  const mkPayCohort = async () =>
+    (
+      await one(
+        `insert into "Cohort" (id, "tutorId", "subjectId", status, format, "sessionsPerWeek", "updatedAt")
+         values (gen_random_uuid(), $1, $2, 'ACTIVE'::"CohortStatus", 'ONE_TO_ONE', 1, now()) returning id`,
+        [payTutor, out.subjectId1],
+      )
+    ).id;
+  const mkPayMembership = async (cohortId, status) =>
+    (
+      await one(
+        `insert into "CohortMembership" (id, "cohortId", "studentId", status, "updatedAt")
+         values (gen_random_uuid(), $1, $2, $3::"MembershipStatus", now()) returning id`,
+        [cohortId, payStudentProfileId, status],
+      )
+    ).id;
+  const mkPayment = async (membershipId, status) =>
+    (
+      await one(
+        `insert into "Payment" (id, "cohortMembershipId", amount, status, "billingPeriodStart", "billingPeriodEnd", "updatedAt")
+         values (gen_random_uuid(), $1, 100, $2::"PaymentStatus", now(), now() + interval '28 days', now()) returning id`,
+        [membershipId, status],
+      )
+    ).id;
+
+  // Payable membership (PENDING_PAYMENT). It also carries an already-SUCCESS
+  // payment so "resolve dispute - refund issued" has a paid cycle to prorate.
+  const payableCohortId = await mkPayCohort();
+  out.cohortMembershipId = await mkPayMembership(payableCohortId, 'PENDING_PAYMENT');
+  await mkPayment(out.cohortMembershipId, 'SUCCESS');
+  // One undelivered (non-completed, non-makeup) session inside the billing period, so
+  // proration gives sessionsRemaining > 0 and the dispute refund qualifies for approval.
+  await one(
+    `insert into "ScheduledSession" (id, "cohortId", "scheduledStart", "scheduledEnd", status, "updatedAt")
+     values (gen_random_uuid(), $1, now() + interval '2 days', now() + interval '2 days 1 hour',
+             'SCHEDULED'::"SessionStatus", now()) returning id`,
+    [payableCohortId],
+  );
+  // Membership that is NOT awaiting payment (409 case) + a paid payment for refunds.
+  out.alreadyPaidMembershipId = await mkPayMembership(await mkPayCohort(), 'ACTIVE');
+  const paidPaymentId = await mkPayment(out.alreadyPaidMembershipId, 'SUCCESS');
+
+  const mkRefund = async (status) =>
+    (
+      await one(
+        `insert into "Refund" (id, "paymentId", reason, status, "sessionsRemaining", "totalSessionsBilled", amount)
+         values (gen_random_uuid(), $1, 'TUTOR_DROPOUT'::"RefundReason", $2::"RefundStatus", 4, 8, 50) returning id`,
+        [paidPaymentId, status],
+      )
+    ).id;
+  out.refundId = await mkRefund('PENDING'); // approve success
+  out.refundId2 = await mkRefund('PENDING'); // reject success / validation cases
+  out.alreadyActionedRefundId = await mkRefund('APPROVED'); // 409 already actioned
+  // Ineligible refund: nothing undelivered (sessionsRemaining 0, amount 0), so
+  // approveRefund must reject it with 409 (policy conditions not met).
+  out.ineligibleRefundId = (
+    await one(
+      `insert into "Refund" (id, "paymentId", reason, status, "sessionsRemaining", "totalSessionsBilled", amount)
+       values (gen_random_uuid(), $1, 'SESSION_UNDELIVERED'::"RefundReason", 'PENDING'::"RefundStatus", 0, 8, 0) returning id`,
+      [paidPaymentId],
+    )
+  ).id;
+
+  const mkPayout = async (status) =>
+    (
+      await one(
+        `insert into "Payout" (id, "tutorId", "periodStart", "periodEnd", "totalAmount", status, "paidAt")
+         values (gen_random_uuid(), $1, now() - interval '14 days', now() - interval '7 days', 500,
+                 $2::"PayoutStatus", case when $2 = 'PAID' then now() else null end) returning id`,
+        [payTutor, status],
+      )
+    ).id;
+  out.payoutId = await mkPayout('PENDING');
+  out.alreadyPaidPayoutId = await mkPayout('PAID');
+
+  const reporterUserId = (
+    await one('select "userId" from "StudentProfile" where id = $1', [out.deliveryStudentProfileId])
+  ).userId;
+  const mkComplaint = async (status, action) =>
+    (
+      await one(
+        `insert into "ComplaintReport" (id, "reporterId", category, description, status, "resolutionAction", "resolutionNotes")
+         values (gen_random_uuid(), $1, 'PAYMENT_ISSUE'::"ComplaintCategory", 'Postman 06 fixture complaint',
+                 $2::"ComplaintStatus", $3::"ResolutionAction", $4) returning id`,
+        [reporterUserId, status, action, action ? 'Closed by fixture' : null],
+      )
+    ).id;
+  out.complaintId = await mkComplaint('OPEN', null); // admin dispute detail / dismiss (runs before 06 files its own)
+  out.complaintId2 = await mkComplaint('OPEN', null);
+  out.closedComplaintId = await mkComplaint('DISMISSED', 'NO_ACTION');
+
+  const adminUserId = (
+    await one('select id from "User" where email = $1', [envGet('adminEmail')])
+  ).id;
+  out.promotionId = (
+    await one(
+      `insert into "PromotionCode" (id, code, "discountType", "discountValue", "validFrom", "validTo", "isActive", "createdById")
+       values (gen_random_uuid(), $1, 'PERCENT'::"DiscountType", 10, now() - interval '1 day', now() + interval '90 days', true, $2)
+       returning id`,
+      [`PM${RUN}`.toUpperCase(), adminUserId],
+    )
+  ).id;
+
   // ── write env ─────────────────────────────────────────────────────
   for (const [key, value] of Object.entries(out)) {
     const existing = envFile.values.find((v) => v.key === key);

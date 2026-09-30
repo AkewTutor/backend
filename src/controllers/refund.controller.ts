@@ -10,7 +10,7 @@ export const adminReview = async (req: Request, res: Response, next: NextFunctio
     const refunds = await prisma.refund.findMany({
       where: { status },
     });
-    return res.status(200).json({ data: refunds });
+    return res.status(200).json({ statusCode: 200, success: true, message: 'OK', data: refunds });
   } catch (error) {
     next(error);
   }
@@ -22,7 +22,7 @@ export const adminApprove = async (req: Request, res: Response, next: NextFuncti
     if (!adminId) throw new ApiError(401, 'Unauthorized');
 
     const result = await refundService.approveRefund(req.params.refundId as string, adminId);
-    return res.status(200).json({ data: result });
+    return res.status(200).json({ statusCode: 200, success: true, message: 'OK', data: result });
   } catch (error) {
     next(error);
   }
@@ -38,7 +38,7 @@ export const adminReject = async (req: Request, res: Response, next: NextFunctio
       adminId,
       req.body.rejectionReason,
     );
-    return res.status(200).json({ data: result });
+    return res.status(200).json({ statusCode: 200, success: true, message: 'OK', data: result });
   } catch (error) {
     next(error);
   }

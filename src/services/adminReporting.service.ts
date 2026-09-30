@@ -8,7 +8,7 @@ export async function aggregatePlatformHealth() {
     pendingPayoutBatches,
   ] = await Promise.all([
     prisma.complaintReport.count({ where: { status: 'OPEN' } }),
-    prisma.cohort.count({ where: { isOverdue: true } as any }),
+    prisma.cohort.count({ where: { adminOverdueNotifiedAt: { not: null } } }),
     prisma.scheduledSession.count({ where: { recordingStatus: 'ESCALATED' } }),
     prisma.payout.count({ where: { status: 'PENDING' } }),
   ]);

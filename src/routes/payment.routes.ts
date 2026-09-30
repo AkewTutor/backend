@@ -3,16 +3,17 @@ import { initiate, webhook, getHistory } from '../controllers/payment.controller
 import authMiddleware from '../middlewares/auth.middleware.js';
 import validate from '../middlewares/validate.middleware.js';
 import { initiatePaymentSchema } from '../schemas/payment.schema.js';
-import rateLimit from 'express-rate-limit';
+import { rateLimiter } from '../middlewares/rateLimiter.middleware.js';
+import { PAYMENT_INITIATE_LIMIT } from '../config/rateLimits.js';
 
-const PAYMENT_INITIATE_LIMIT = rateLimit({ windowMs: 60 * 60 * 1000, max: 10 }); // 10/hour
+const initiateLimiter = rateLimiter(PAYMENT_INITIATE_LIMIT); // 10/hour, skipped in development
 
 const router = Router();
 
 router.post(
   '/initiate',
   authMiddleware,
-  PAYMENT_INITIATE_LIMIT,
+  initiateLimiter,
   validate(initiatePaymentSchema),
   initiate,
 );
