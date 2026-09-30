@@ -18,7 +18,15 @@ const validate = <T>(schema: ZodSchema<T>) => {
       const data = parsedData as any;
       if (data.body) req.body = data.body;
       if (data.params) req.params = data.params;
-      if (data.query) req.query = data.query;
+      if (data.query) {
+        // Express 5: req.query is a getter-only property, so redefine it
+        Object.defineProperty(req, 'query', {
+          value: data.query,
+          writable: true,
+          configurable: true,
+          enumerable: true,
+        });
+      }
 
       next();
     } catch (error) {
@@ -28,9 +36,7 @@ const validate = <T>(schema: ZodSchema<T>) => {
           return `${path}: ${issue.message}`;
         });
 
-        return next(
-          new ApiError(HTTP_STATUS.BAD_REQUEST, 'Validation failed', errorMessages)
-        );
+        return next(new ApiError(HTTP_STATUS.BAD_REQUEST, 'Validation failed', errorMessages));
       }
       next(error);
     }

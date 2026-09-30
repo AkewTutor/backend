@@ -66,3 +66,9 @@ export const verifyContactSchema = z.object({
     code: z.string().min(1),
   }),
 });
+
+export const resendVerificationSchema = z.object({
+  body: z.object({
+    userId: z.string().uuid(),
+  }),
+});

@@ -1,0 +1,15 @@
+I'm working on a project. I have almost finished the backend and now I'm about to test it using postman since all of its unit and integration tests are passing. So for this purpose I will need you to stay long with me and guide me. We're on a free instance which means you have small tokens therefore try your best not to consume your tokens fast
+
+Next I will send you the postman collections I'm using to test my backend
+
+I was testing my backend using the above postman collection. 01 has fully passed, I'm now at 02.
+
+I'm using the following command to run the postman collections:
+
+node scripts/postman-bootstrap.mjs --env ../postman/AkewTutor.postman_environment.json && \
+npx newman run ../postman/02-accounts-guardianship.postman_collection.json \
+  -e ../postman/AkewTutor.postman_environment.generated.json \
+  --export-environment ../postman/after-02.json \
+  --reporter-cli-no-success-assertions --reporter-cli-no-banner
+
+So I will run the 02 collection now and I will give you the result so that we can continue testing. 

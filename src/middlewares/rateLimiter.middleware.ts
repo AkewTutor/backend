@@ -21,6 +21,9 @@ export function rateLimiter(config: RateLimitConfig) {
     standardHeaders: true,
     legacyHeaders: false,
     validate: false,
+    // Same reasoning as defaultLimiter below: off in local development so
+    // Postman/Newman runs aren't blocked. Test and production keep it.
+    skip: () => process.env.NODE_ENV === 'development',
     keyGenerator: config.keyGenerator
       ? (req: Request, _res: Response) => config.keyGenerator!(req)
       : undefined,
@@ -66,6 +69,7 @@ export const authLimiter = rateLimit({
   max: 10, // Stricter ceiling for sensitive authentication hooks
   standardHeaders: true,
   legacyHeaders: false,
+  skip: () => process.env.NODE_ENV === 'development',
   handler: (req, res) => {
     return res
       .status(HTTP_STATUS.TOO_MANY_REQUESTS)

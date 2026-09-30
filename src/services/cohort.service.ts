@@ -286,6 +286,8 @@ export async function getCohortMembers(
     include: { memberships: true, tutor: true },
   });
 
+  if (!cohort) throw new ApiError(404, 'Cohort not found');
+
   const isMember =
     cohort?.memberships.some((m) => m.studentId === callerId) ||
     (callerRole === 'TUTOR' && cohort?.tutorId === callerId);

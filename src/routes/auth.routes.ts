@@ -18,6 +18,7 @@ import {
   registerParentSchema,
   registerStudentSchema,
   registerTutorSchema,
+  resendVerificationSchema,
   verifyContactSchema,
 } from '../schemas/auth.schema.js';
 
@@ -45,6 +46,7 @@ authRouter.post('/verify-contact', validate(verifyContactSchema), controller.ver
 authRouter.post(
   '/resend-verification',
   rateLimiter(RESEND_VERIFICATION_LIMIT),
+  validate(resendVerificationSchema),
   controller.verify('resend'),
 );
 authRouter.post(

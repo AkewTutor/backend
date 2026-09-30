@@ -22,15 +22,15 @@ export const rankSubjectsSchema = z.object({
 });
 
 export const updateTutorProfileSchema = z.object({
-  body: z
-    .object({
-      bio: z.string().optional(),
-      videoIntroductionUrl: z.string().optional(),
-      // Omitting verificationStatus for mass-assignment guard
-    })
-    .passthrough()
-    .transform((data) => {
-      const { verificationStatus, ...rest } = data as any;
-      return rest;
-    }),
+  // Only the fields documented for PATCH /tutors/me/profile (Doc 06-02).
+  // z.object() strips unknown keys, so verificationStatus & friends can never
+  // reach the service (mass-assignment guard), and columns that don't exist
+  // on TutorProfile can no longer cause a Prisma 500.
+  body: z.object({
+    profilePictureUrl: z.string().optional(),
+    bio: z.string().optional(),
+    experienceDescription: z.string().optional(),
+    educationInstitution: z.string().optional(),
+    degree: z.string().optional(),
+  }),
 });

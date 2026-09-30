@@ -19,8 +19,11 @@ vi.mock('../../src/config/db.js', () => ({
       findUnique: vi.fn(),
       delete: vi.fn(),
     },
+    tutorProfile: {
+      findUnique: vi.fn(),
+    },
     scheduledSession: {
-      findFirst: vi.fn(),
+      findMany: vi.fn(),
     },
   },
 }));
@@ -30,7 +33,14 @@ import { listSlots, removeSlot, setSlots } from '../../src/services/availability
 
 function resetAllMocks() {
   vi.clearAllMocks();
+  // caller is user 'tutor-1'; their TutorProfile id happens to be 'tutor-1' too
+  (prisma.tutorProfile.findUnique as any).mockResolvedValue({ id: 'tutor-1' });
 }
+
+const futureSession = (startIso: string, endIso: string) => ({
+  scheduledStart: new Date(startIso),
+  scheduledEnd: new Date(endIso),
+});
 
 describe('setSlots / listSlots', () => {
   beforeEach(() => resetAllMocks());
@@ -81,7 +91,7 @@ describe('removeSlot', () => {
       id: 'slot-1',
       tutorId: 'tutor-1',
     });
-    (prisma.scheduledSession.findFirst as any).mockResolvedValue(null);
+    (prisma.scheduledSession.findMany as any).mockResolvedValue([]);
     (prisma.availabilitySlot.delete as any).mockResolvedValue({ id: 'slot-1' });
 
     const result = await removeSlot('tutor-1', 'slot-1');
@@ -105,11 +115,13 @@ describe('removeSlot', () => {
     (prisma.availabilitySlot.findUnique as any).mockResolvedValue({
       id: 'slot-1',
       tutorId: 'tutor-1',
+      isRecurring: false,
+      startTime: new Date('2099-06-01T10:00:00Z'),
+      endTime: new Date('2099-06-01T12:00:00Z'),
     });
-    (prisma.scheduledSession.findFirst as any).mockResolvedValue({
-      id: 'session-1',
-      status: 'CONFIRMED',
-    });
+    (prisma.scheduledSession.findMany as any).mockResolvedValue([
+      futureSession('2099-06-01T10:30:00Z', '2099-06-01T11:30:00Z'),
+    ]);
 
     await expect(removeSlot('tutor-1', 'slot-1')).rejects.toMatchObject({
       statusCode: 409,
@@ -123,11 +135,11 @@ describe('removeSlot', () => {
       id: 'slot-2',
       tutorId: 'tutor-1',
     });
-    (prisma.scheduledSession.findFirst as any).mockResolvedValue(null); // scoped to this slot's overlap only
+    (prisma.scheduledSession.findMany as any).mockResolvedValue([]); // scoped to this slot's overlap only
     (prisma.availabilitySlot.delete as any).mockResolvedValue({ id: 'slot-2' });
 
     await expect(removeSlot('tutor-1', 'slot-2')).resolves.toMatchObject({ deleted: true });
-    const callArg = (prisma.scheduledSession.findFirst as any).mock.calls[0][0];
-    expect(callArg).toBeDefined();
+    const callArg = (prisma.scheduledSession.findMany as any).mock.calls[0][0];
+    expect(callArg.where).toMatchObject({ cohort: { tutorId: 'tutor-1' } });
   });
 });

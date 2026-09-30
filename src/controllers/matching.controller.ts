@@ -1,6 +1,7 @@
 import type { Response, NextFunction } from 'express';
 import { AuthRequest } from '../types/index.js';
 import * as matchingService from '../services/matching.service.js';
+import { resolveCallerProfileId } from '../utils/profileIds.js';
 
 export async function searchTutors(
   req: AuthRequest,
@@ -9,13 +10,14 @@ export async function searchTutors(
 ): Promise<void> {
   try {
     const user = req.user!;
+    const callerId = await resolveCallerProfileId(user);
     const result = await matchingService.searchOneToOneTutors(
-      user.id,
+      callerId,
       user.role,
       undefined,
       req.query,
     );
-    res.status(200).json(result);
+    res.status(200).json({ statusCode: 200, success: true, message: 'OK', data: result });
   } catch (error) {
     next(error);
   }
@@ -28,13 +30,14 @@ export async function getRecommendations(
 ): Promise<void> {
   try {
     const user = req.user!;
+    const callerId = await resolveCallerProfileId(user);
     const result = await matchingService.recommendTutorsWithMatchPercent(
-      user.id,
+      callerId,
       user.role,
       undefined,
       req.query,
     );
-    res.status(200).json(result);
+    res.status(200).json({ statusCode: 200, success: true, message: 'OK', data: result });
   } catch (error) {
     next(error);
   }
@@ -47,9 +50,10 @@ export async function getTutorDetail(
 ): Promise<void> {
   try {
     const user = req.user!;
+    const callerId = await resolveCallerProfileId(user);
     const tutorId = req.params.tutorId as string;
-    const result = await matchingService.getTutorDetail(tutorId, user.id, user.role);
-    res.status(200).json(result);
+    const result = await matchingService.getTutorDetail(tutorId, callerId, user.role);
+    res.status(200).json({ statusCode: 200, success: true, message: 'OK', data: result });
   } catch (error) {
     next(error);
   }
@@ -62,14 +66,15 @@ export async function selectTutor(
 ): Promise<void> {
   try {
     const user = req.user!;
+    const callerId = await resolveCallerProfileId(user);
     const { tutorId, studentId } = req.body;
     const result = await matchingService.selectTutor(
-      user.id,
+      callerId,
       user.role,
       studentId as string | undefined,
       tutorId as string,
     );
-    res.status(201).json(result);
+    res.status(201).json({ statusCode: 201, success: true, message: 'Created', data: result });
   } catch (error) {
     next(error);
   }
@@ -82,13 +87,15 @@ export async function noExactMatch(
 ): Promise<void> {
   try {
     const user = req.user!;
-    const studentId = req.body || {};
+    const callerId = await resolveCallerProfileId(user);
+    const { studentId, subjectId } = req.body ?? {};
     const result = await matchingService.triggerNoExactMatch(
-      user.id,
+      callerId,
       user.role,
       studentId as string | undefined,
+      subjectId as string | undefined,
     );
-    res.status(200).json(result);
+    res.status(200).json({ statusCode: 200, success: true, message: 'OK', data: result });
   } catch (error) {
     next(error);
   }
@@ -101,14 +108,15 @@ export async function requestGroupFormat(
 ): Promise<void> {
   try {
     const user = req.user!;
-    const { studentId, subjectId } = req.body;
+    const callerId = await resolveCallerProfileId(user);
+    const { studentId, subjectId } = req.body ?? {};
     const result = await matchingService.requestGroupFormat(
-      user.id,
+      callerId,
       user.role,
       studentId as string | undefined,
       subjectId as string,
     );
-    res.status(201).json(result);
+    res.status(201).json({ statusCode: 201, success: true, message: 'Created', data: result });
   } catch (error) {
     next(error);
   }
@@ -121,9 +129,10 @@ export async function getMyRequestStatus(
 ): Promise<void> {
   try {
     const user = req.user!;
+    const callerId = await resolveCallerProfileId(user);
     const studentId = req.query.studentId as string | undefined;
-    const result = await matchingService.getMyRequestStatus(user.id, user.role, studentId);
-    res.status(200).json(result);
+    const result = await matchingService.getMyRequestStatus(callerId, user.role, studentId);
+    res.status(200).json({ statusCode: 200, success: true, message: 'OK', data: result });
   } catch (error) {
     next(error);
   }

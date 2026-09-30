@@ -7,7 +7,7 @@ export const listPending = asyncHandler(
     const page = parseInt(req.query.page as string, 10) || 1;
     const limit = parseInt(req.query.limit as string, 10) || 20;
     const result = await adminTutorVerificationService.listPendingTutors(page, limit);
-    res.status(200).json(result);
+    res.status(200).json({ statusCode: 200, success: true, message: 'OK', data: result });
   },
 );
 
@@ -16,7 +16,7 @@ export const approve = asyncHandler(
     const tutorId = req.params.tutorId as string;
     const adminId = (req as any).user.id;
     const result = await adminTutorVerificationService.approveTutor(tutorId, adminId);
-    res.status(200).json(result);
+    res.status(200).json({ statusCode: 200, success: true, message: 'OK', data: result });
   },
 );
 
@@ -24,8 +24,8 @@ export const reject = asyncHandler(
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     const tutorId = req.params.tutorId as string;
     const adminId = (req as any).user.id;
-    const { reason } = req.body;
+    const { reason } = req.body ?? {};
     const result = await adminTutorVerificationService.rejectTutor(tutorId, adminId, reason);
-    res.status(200).json(result);
+    res.status(200).json({ statusCode: 200, success: true, message: 'OK', data: result });
   },
 );

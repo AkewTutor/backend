@@ -14,7 +14,8 @@ export async function searchOneToOneTutors(
   const student = await prisma.studentProfile.findUnique({ where: { id: studentId } });
   if (!student) throw new ApiError(404, 'Student not found');
 
-  if (student.formatPreference !== 'ONE_TO_ONE') {
+  // An unset preference defaults to 1-to-1 search
+  if (student.formatPreference && student.formatPreference !== 'ONE_TO_ONE') {
     throw new ApiError(
       400,
       'Search is only available for the 1-to-1 format — see /matching/group-format for 1-to-3/1-to-5',
@@ -23,10 +24,8 @@ export async function searchOneToOneTutors(
 
   let filter: any = { verificationStatus: 'VERIFIED' };
 
-  if (query.budget) filter.pricePerStudentPerHour = { lte: query.budget };
-  if (query.priceMax) filter.pricePerStudentPerHour = { lte: query.priceMax };
-  if (query.language) filter.teachingLanguage = query.language;
-
+  // NOTE: TutorProfile has no price/language columns yet, so budget/language
+  // query params are accepted but not applied.
   let tutors = await prisma.tutorProfile.findMany({
     where: {
       ...filter,
@@ -34,7 +33,6 @@ export async function searchOneToOneTutors(
         some: {
           subjectId: query.subjectId,
           rank: 1,
-          ...(query.grade !== undefined ? { grade: query.grade } : {}),
         },
       },
     },
@@ -48,7 +46,6 @@ export async function searchOneToOneTutors(
           some: {
             subjectId: query.subjectId,
             rank: 2,
-            ...(query.grade !== undefined ? { grade: query.grade } : {}),
           },
         },
       },
@@ -73,11 +70,11 @@ export async function recommendTutorsWithMatchPercent(
 
   const targetSubjectId = query?.subjectId || activeRequest?.subjectId;
 
-  if (!activeRequest) {
+  if (!activeRequest && targetSubjectId) {
     activeRequest = await prisma.matchRequest.create({
       data: {
         studentId: studentIdToUse,
-        subjectId: targetSubjectId || 'dummy-subject',
+        subjectId: targetSubjectId,
         format: 'ONE_TO_ONE',
         path: 'PATH_A',
         status: 'SEARCHING',
@@ -86,8 +83,6 @@ export async function recommendTutorsWithMatchPercent(
   }
 
   let filter: any = { verificationStatus: 'VERIFIED' };
-  if (student.preferredLanguage) filter.teachingLanguage = student.preferredLanguage;
-  if (student.budgetPreference) filter.pricePerStudentPerHour = { lte: student.budgetPreference };
 
   let whereClause: any = { ...filter };
   if (targetSubjectId) {
@@ -165,8 +160,8 @@ export async function recommendTutorsWithMatchPercent(
     .slice(0, 15);
 
   return {
-    matchRequestId: activeRequest.id,
-    zeroMatchSince: activeRequest.zeroMatchSince,
+    matchRequestId: activeRequest?.id ?? null,
+    zeroMatchSince: activeRequest?.zeroMatchSince ?? null,
     recommendations,
   };
 }
@@ -179,6 +174,11 @@ export async function selectTutor(
 ): Promise<any> {
   const studentId = callerRole === 'STUDENT' ? callerId : overrideStudentId || callerId;
   await assertAccountStatusAllowsAccess(studentId);
+
+  const tutor = await prisma.tutorProfile.findUnique({ where: { id: tutorId } });
+  if (!tutor || tutor.verificationStatus !== 'VERIFIED') {
+    throw new ApiError(400, 'Selected tutor is not eligible');
+  }
 
   try {
     return await prisma.$transaction(async (tx) => {
@@ -227,19 +227,27 @@ export async function triggerNoExactMatch(
   callerId: string,
   callerRole: string,
   overrideStudentId?: string,
+  subjectId?: string,
 ): Promise<any> {
   const studentId = callerRole === 'STUDENT' ? callerId : overrideStudentId || callerId;
   await assertAccountStatusAllowsAccess(studentId);
 
   let matchReq = await prisma.matchRequest.findFirst({
-    where: { studentId, status: 'SEARCHING' },
+    where: { studentId, status: { in: ['SEARCHING', 'PENDING_ADMIN_ASSIGNMENT'] } },
   });
 
+  if (matchReq && matchReq.status === 'PENDING_ADMIN_ASSIGNMENT') {
+    throw new ApiError(409, 'You already have a pending or active match');
+  }
+
   if (!matchReq) {
+    if (!subjectId) {
+      throw new ApiError(400, 'subjectId is required when there is no search in progress');
+    }
     matchReq = await prisma.matchRequest.create({
       data: {
         studentId,
-        subjectId: 'dummy-subject',
+        subjectId,
         format: 'ONE_TO_ONE',
         path: 'PATH_B',
         status: 'PENDING_ADMIN_ASSIGNMENT',
@@ -263,6 +271,10 @@ export async function requestGroupFormat(
 ): Promise<any> {
   const studentId = callerRole === 'STUDENT' ? callerId : overrideStudentId || callerId;
   await assertAccountStatusAllowsAccess(studentId);
+
+  if (!subjectId) {
+    throw new ApiError(400, 'subjectId is required');
+  }
 
   const student = await prisma.studentProfile.findUnique({ where: { id: studentId } });
   if (student?.formatPreference === 'ONE_TO_ONE') {

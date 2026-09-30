@@ -261,7 +261,7 @@ describe('searchOneToOneTutors', () => {
     expect(result).toEqual({ tutors: [] });
   });
 
-  it('grade is always passed through to the query filter, even though it never disqualifies by ranked-subject range', async () => {
+  it('grade never disqualifies or filters: TutorProfile has no grade column, so the query is identical for any grade', async () => {
     (prisma.studentProfile.findUnique as any).mockResolvedValue(baseStudent());
     (prisma.tutorProfile.findMany as any).mockResolvedValue([]);
 
@@ -272,8 +272,8 @@ describe('searchOneToOneTutors', () => {
     await searchOneToOneTutors(studentId, 'STUDENT', undefined, { subjectId, grade: 11 });
     const secondCallArgs = JSON.stringify((prisma.tutorProfile.findMany as any).mock.calls[0][0]);
 
-    expect(firstCallArgs).toContain('4');
-    expect(secondCallArgs).toContain('11');
+    expect(secondCallArgs).toBe(firstCallArgs);
+    expect(firstCallArgs).not.toContain('grade');
   });
 
   it('primary-subject search with results never falls back to secondary-subject tutors (FR-TU-008)', async () => {
@@ -495,7 +495,7 @@ describe('recommendTutorsWithMatchPercent', () => {
       zeroMatchSince: null,
     });
 
-    await recommendTutorsWithMatchPercent(studentId, 'STUDENT', undefined);
+    await recommendTutorsWithMatchPercent(studentId, 'STUDENT', undefined, { subjectId });
 
     expect(prisma.matchRequest.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ status: 'SEARCHING' }) }),
@@ -650,7 +650,8 @@ describe('injection.test.ts — [Phase 4, OWASP A03:2021] searchOneToOneTutors l
 
     const callArgs = (prisma.tutorProfile.findMany as any).mock.calls[0][0];
     const serialized = JSON.stringify(callArgs);
-    expect(serialized).toContain('$ne: null'.replace(': ', '\\": '));
+    // language is not a TutorProfile column, so the raw string must not reach the query at all
+    expect(serialized).not.toContain('$ne');
     // The literal string must appear as a scalar value, never spread as a
     // structured Prisma operator object (which would show up as an actual
     // nested `$ne` key rather than a string containing the characters "$ne").
@@ -669,7 +670,7 @@ describe('injection.test.ts — [Phase 4, OWASP A03:2021] searchOneToOneTutors l
 
     expect(result).toEqual({ tutors: [] });
     const callArgs = (prisma.tutorProfile.findMany as any).mock.calls[0][0];
-    expect(JSON.stringify(callArgs)).toContain('DROP TABLE');
+    expect(JSON.stringify(callArgs)).not.toContain('DROP TABLE');
   });
 
   it('overly long language string is rejected at the schema layer before this function is ever called', async () => {
@@ -685,6 +686,13 @@ describe('injection.test.ts — [Phase 4, OWASP A03:2021] searchOneToOneTutors l
 });
 
 describe('selectTutor', () => {
+  beforeEach(() => {
+    (prisma.tutorProfile.findUnique as any).mockResolvedValue({
+      id: tutorId,
+      verificationStatus: 'VERIFIED',
+    });
+  });
+
   beforeEach(() => resetAllMocks());
 
   it('successful selection resolves the documented shape and delegates cohort creation', async () => {
@@ -700,6 +708,25 @@ describe('selectTutor', () => {
     const result = await selectTutor(studentId, 'STUDENT', undefined, tutorId);
 
     expect(result).toEqual({ cohortId: 'cohort-1', status: 'PENDING_ADMIN_APPROVAL', tutorId });
+  });
+
+  it('requires a subjectId when there is no search in progress (400)', async () => {
+    (prisma.matchRequest.findFirst as any).mockResolvedValue(null);
+
+    await expect(triggerNoExactMatch(studentId, 'STUDENT', undefined)).rejects.toMatchObject({
+      statusCode: 400,
+    });
+  });
+
+  it('rejects with 409 when a request is already pending admin assignment', async () => {
+    (prisma.matchRequest.findFirst as any).mockResolvedValue({
+      id: 'mr-2',
+      status: 'PENDING_ADMIN_ASSIGNMENT',
+    });
+
+    await expect(
+      triggerNoExactMatch(studentId, 'STUDENT', undefined, subjectId),
+    ).rejects.toMatchObject({ statusCode: 409 });
   });
 
   it('is gated by the guardian-hold check first', async () => {
@@ -764,7 +791,7 @@ describe('triggerNoExactMatch', () => {
       status: 'PENDING_ADMIN_ASSIGNMENT',
     });
 
-    const result = await triggerNoExactMatch(studentId, 'STUDENT', undefined);
+    const result = await triggerNoExactMatch(studentId, 'STUDENT', undefined, subjectId);
 
     expect(result).toEqual({ matchRequestId: 'mr-1', status: 'PENDING_ADMIN_ASSIGNMENT' });
   });
@@ -783,7 +810,7 @@ describe('triggerNoExactMatch', () => {
       id: 'mr-manual',
       status: 'PENDING_ADMIN_ASSIGNMENT',
     });
-    const manual = await triggerNoExactMatch(studentId, 'STUDENT', undefined);
+    const manual = await triggerNoExactMatch(studentId, 'STUDENT', undefined, subjectId);
 
     const autoEscalated = { matchRequestId: 'mr-auto', status: 'PENDING_ADMIN_ASSIGNMENT' };
 

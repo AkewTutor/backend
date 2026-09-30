@@ -25,8 +25,10 @@ export async function requestSwitch(
     throw new ApiError(400, 'You are already in this format');
   }
 
+  // Payment is linked to the membership, not the student
   const payment = await (prisma as any).payment.findFirst({
-    where: { studentId } as any, // mocked in tests
+    where: { cohortMembershipId: membership.id },
+    orderBy: { createdAt: 'desc' },
   });
 
   await prisma.cohortMembership.update({

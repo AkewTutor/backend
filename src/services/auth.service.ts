@@ -1,14 +1,17 @@
 // src/services/auth.service.ts
-import { randomInt, randomUUID } from 'crypto';
+import { randomUUID } from 'crypto';
 
 import { LOGIN_RATE_LIMIT } from '../config/rateLimits.js';
 import { prisma } from '../config/db.js';
+import { env } from '../config/env.js';
 import ApiError from '../utils/ApiError.js';
 import { signAccessToken } from '../utils/jwt.js';
 import { comparePassword, hashPassword } from '../utils/password.js';
 import { generateRefreshToken, hashRefreshToken } from '../utils/refreshToken.js';
+import { generateVerificationCode, hashVerificationCode } from '../utils/verificationCode.js';
 import { record as recordAuditLog } from './auditLog.service.js';
 import { dispatchNotification } from './notification.service.js';
+import type { VerificationCodePurpose } from '@prisma/client';
 
 // ──────────────────────────────────────────────────────────────
 // Public types
@@ -96,8 +99,68 @@ const DEFAULT_PREFERRED_LANGUAGE = 'English';
 // Helpers
 // ──────────────────────────────────────────────────────────────
 
-function generateVerificationCode(): string {
-  return String(randomInt(100_000, 999_999));
+/**
+ * Generates a code, stores its hash (never the plaintext) with an
+ * expiry, and returns the plaintext for the caller to send via
+ * notification.service.ts. Any older unconsumed code of the same
+ * purpose for this user is superseded — only the most recently issued
+ * code can ever be consumed, so requesting a new one invalidates the
+ * last.
+ */
+async function issueVerificationCode(
+  userId: string,
+  purpose: VerificationCodePurpose,
+): Promise<string> {
+  const code = generateVerificationCode();
+  const now = new Date();
+
+  await prisma.$transaction([
+    prisma.verificationCode.updateMany({
+      where: { userId, purpose, consumedAt: null },
+      data: { consumedAt: now },
+    }),
+    prisma.verificationCode.create({
+      data: {
+        userId,
+        purpose,
+        codeHash: hashVerificationCode(code),
+        expiresAt: new Date(now.getTime() + env.VERIFICATION_CODE_TTL_MINUTES * 60_000),
+      },
+    }),
+  ]);
+
+  return code;
+}
+
+/**
+ * Looks up the most recent unconsumed code of the given purpose for
+ * this user, checks it's unexpired and matches, and — only on a match —
+ * marks it consumed so it can't be replayed. Returns false (never
+ * throws) on any mismatch; callers turn that into their own ApiError so
+ * the message stays purpose-specific (Doc 8-1 §resetPassword/verifyContact).
+ */
+async function consumeVerificationCode(
+  userId: string,
+  purpose: VerificationCodePurpose,
+  code: string,
+): Promise<boolean> {
+  const row = await prisma.verificationCode.findFirst({
+    where: { userId, purpose, consumedAt: null },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  if (!row || row.expiresAt < new Date() || row.codeHash !== hashVerificationCode(code)) {
+    return false;
+  }
+
+  // Guard against a race between two concurrent verify attempts: only
+  // the request that actually flips consumedAt from null wins.
+  const claim = await prisma.verificationCode.updateMany({
+    where: { id: row.id, consumedAt: null },
+    data: { consumedAt: new Date() },
+  });
+
+  return claim.count === 1;
 }
 
 function invalidSessionError(): ApiError {
@@ -180,6 +243,8 @@ export async function registerUser(
             userId,
             grade: studentInput.grade,
             preferredLanguage: DEFAULT_PREFERRED_LANGUAGE,
+            // Grade 6-12 students self-register; only guardian-invited (grade 1-5) accounts wait for activation
+            ...(studentInput.grade >= 6 ? { accountStatus: 'ACTIVE' as const } : {}),
           },
         }),
       ]);
@@ -216,8 +281,8 @@ export async function registerUser(
   // per Doc 8-1, a failed delivery must never roll back a successful
   // registration, so dispatch is wrapped and its failure is swallowed.
   const channel: 'EMAIL' | 'SMS' = input.email ? 'EMAIL' : 'SMS';
-  const code = generateVerificationCode();
   try {
+    const code = await issueVerificationCode(user.id, 'CONTACT_VERIFICATION');
     await dispatchNotification(user.id, 'REGISTRATION_COMPLETE', {
       channel,
       code,
@@ -299,12 +364,11 @@ export async function login(
           data: { failedLoginCount: { increment: 1 } },
         });
         newCount = (updated as { failedLoginCount?: number }).failedLoginCount ?? 0;
-        // eslint-disable-next-line no-console
+
         console.error(
           `[login DIAG] increment OK — newCount=${newCount}, threshold=${LOGIN_FAILURE_THRESHOLD}, userId=${user.id}`,
         );
       } catch (err) {
-        // eslint-disable-next-line no-console
         console.error('[login DIAG] increment FAILED:', err);
       }
 
@@ -316,15 +380,13 @@ export async function login(
             target: user.id,
             timestamp: new Date(),
           });
-          // eslint-disable-next-line no-console
+
           console.error('[login DIAG] audit write OK');
         } catch (err) {
-          // eslint-disable-next-line no-console
           console.error('[login DIAG] audit write FAILED:', err);
         }
       }
     } else {
-      // eslint-disable-next-line no-console
       console.error(`[login DIAG] user not found for identifier="${identifier}"`);
     }
 
@@ -494,8 +556,8 @@ export async function requestPasswordReset(identifier: string): Promise<void> {
     });
     if (!user) return;
 
-    const code = generateVerificationCode();
     const channel: 'EMAIL' | 'SMS' = identifier.includes('@') ? 'EMAIL' : 'SMS';
+    const code = await issueVerificationCode(user.id, 'PASSWORD_RESET');
 
     await dispatchNotification(user.id, 'REGISTRATION_COMPLETE', {
       channel,
@@ -514,11 +576,10 @@ export async function resetPassword(
   code: string,
   newPassword: string,
 ): Promise<void> {
-  // Schema gap: Doc 04 defines no field or model that stores a password-
-  // reset code, so there is nothing to validate `code` against. The
-  // surrounding behavior (update passwordHash, revoke all sessions,
-  // generic 400 on failure) is what the tests pin.
-  void code;
+  const ok = await consumeVerificationCode(userId, 'PASSWORD_RESET', code);
+  if (!ok) {
+    throw new ApiError(400, 'This reset link is no longer valid — request a new one');
+  }
 
   const passwordHash = await hashPassword(newPassword);
 
@@ -544,7 +605,10 @@ export async function verifyContact(
   userId: string,
   code: string,
 ): Promise<{ emailVerifiedAt: Date | null; phoneVerifiedAt: Date | null }> {
-  void code;
+  const ok = await consumeVerificationCode(userId, 'CONTACT_VERIFICATION', code);
+  if (!ok) {
+    throw new ApiError(400, 'Invalid or expired code — request a new one');
+  }
 
   try {
     const updated = await prisma.user.update({
@@ -567,7 +631,7 @@ export async function resendVerification(userId: string): Promise<void> {
   if (!user) return;
 
   const channel: 'EMAIL' | 'SMS' = user.email ? 'EMAIL' : 'SMS';
-  const code = generateVerificationCode();
+  const code = await issueVerificationCode(userId, 'CONTACT_VERIFICATION');
 
   await dispatchNotification(userId, 'REGISTRATION_COMPLETE', {
     channel,

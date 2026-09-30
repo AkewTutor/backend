@@ -20,8 +20,15 @@ export async function createSubject(name: string) {
 }
 
 export async function deactivateSubject(subjectId: string, isActive: boolean) {
-  return prisma.subject.update({
-    where: { id: subjectId },
-    data: { isActive },
-  });
+  try {
+    return await prisma.subject.update({
+      where: { id: subjectId },
+      data: { isActive },
+    });
+  } catch (error: any) {
+    if (error.code === 'P2025') {
+      throw new ApiError(404, 'Subject not found');
+    }
+    throw error;
+  }
 }

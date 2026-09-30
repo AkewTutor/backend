@@ -34,6 +34,10 @@ vi.mock('../../src/config/db.js', () => ({
     user: {
       create: vi.fn(),
     },
+    parentProfile: {
+      findUnique: vi.fn(),
+      create: vi.fn(),
+    },
   },
 }));
 
@@ -74,6 +78,7 @@ function resetAllMocks() {
   (signAccessToken as any).mockReturnValue('signed.jwt.token');
   (dispatchNotification as any).mockResolvedValue(undefined);
   (recordAuditLog as any).mockResolvedValue(undefined);
+  (prisma.parentProfile.findUnique as any).mockResolvedValue({ id: 'parent-profile-1' });
 }
 
 describe('addStudentAndInvite', () => {
@@ -146,7 +151,7 @@ describe('resendOrRegenerateInvite', () => {
   it('owner resends before activation — resets to a fresh 14-day window, not an extension', async () => {
     (prisma.parentStudentRelationship.findUnique as any).mockResolvedValue({
       id: 'rel-1',
-      parentId: 'parent-1',
+      parentId: 'parent-profile-1',
       status: 'INVITED',
     });
     (prisma.parentStudentRelationship.update as any).mockResolvedValue({
@@ -174,7 +179,7 @@ describe('resendOrRegenerateInvite', () => {
   it('an already-activated relationship rejects the resend', async () => {
     (prisma.parentStudentRelationship.findUnique as any).mockResolvedValue({
       id: 'rel-1',
-      parentId: 'parent-1',
+      parentId: 'parent-profile-1',
       status: 'ACTIVE',
     });
 
@@ -187,7 +192,7 @@ describe('resendOrRegenerateInvite', () => {
   it('repeated resends keep resetting the window — no cap, intentionally unlimited', async () => {
     (prisma.parentStudentRelationship.findUnique as any).mockResolvedValue({
       id: 'rel-1',
-      parentId: 'parent-1',
+      parentId: 'parent-profile-1',
       status: 'INVITED',
     });
     (prisma.parentStudentRelationship.update as any).mockResolvedValue({ id: 'rel-1' });
@@ -296,6 +301,7 @@ describe('activateInvite', () => {
       id: 'rel-1',
       status: 'INVITED',
       inviteExpiresAt: new Date(Date.now() + 1000 * 60 * 60),
+      student: { userId: 'user-1' },
     });
     (prisma.$transaction as any).mockResolvedValue([
       { id: 'user-1' },
@@ -313,6 +319,7 @@ describe('activateInvite', () => {
         id: 'rel-1',
         status: 'INVITED',
         inviteExpiresAt: new Date(Date.now() + 1000 * 60 * 60),
+        student: { userId: 'user-1' },
       })
       .mockResolvedValueOnce(null); // second call's lookup reflects the now-consumed token.
     (prisma.$transaction as any).mockResolvedValueOnce([
@@ -332,14 +339,19 @@ describe('inviteOptionalGuardian', () => {
   beforeEach(() => resetAllMocks());
 
   it('a Grade 6–12 student invites a guardian — creates an OPTIONAL_GUARDIAN, INVITED relationship', async () => {
-    (prisma.studentProfile.findUnique as any).mockResolvedValue({ id: 'sp-1', grade: 9 });
-    (prisma.parentStudentRelationship.create as any).mockResolvedValue({
-      id: 'rel-2',
-      relationshipType: 'OPTIONAL_GUARDIAN',
-      status: 'INVITED',
+    (prisma.studentProfile.findUnique as any).mockResolvedValue({
+      id: 'sp-1',
+      userId: 'u-1',
+      grade: 9,
     });
+    (prisma.$transaction as any).mockResolvedValue([
+      { id: 'pp-1' },
+      { id: 'rel-2', relationshipType: 'OPTIONAL_GUARDIAN', status: 'INVITED' },
+    ]);
 
-    const result = await inviteOptionalGuardian('sp-1', 'guardian@example.com');
+    const result = await inviteOptionalGuardian('u-1', 'guardian@example.com');
+
+    expect(prisma.studentProfile.findUnique).toHaveBeenCalledWith({ where: { userId: 'u-1' } });
 
     expect(result).toMatchObject({ relationshipType: 'OPTIONAL_GUARDIAN', status: 'INVITED' });
   });
@@ -347,7 +359,7 @@ describe('inviteOptionalGuardian', () => {
   it('a Grade 1–5 student is blocked — defense in depth', async () => {
     (prisma.studentProfile.findUnique as any).mockResolvedValue({ id: 'sp-1', grade: 3 });
 
-    await expect(inviteOptionalGuardian('sp-1', 'guardian@example.com')).rejects.toMatchObject({
+    await expect(inviteOptionalGuardian('u-1', 'guardian@example.com')).rejects.toMatchObject({
       statusCode: 403,
       message: 'This action is only available to Grade 6–12 students',
     });
@@ -360,7 +372,7 @@ describe('revokeOrModifyRelationship / handleSoleGuardianRemoval', () => {
   it('a guardian revokes their own relationship — not sole; studentAccountStatus key is omitted entirely', async () => {
     (prisma.parentStudentRelationship.findUnique as any).mockResolvedValue({
       id: 'rel-1',
-      parentId: 'parent-1',
+      parentId: 'parent-profile-1',
       studentProfileId: 'sp-1',
       relationshipType: 'MANDATORY_GUARDIAN',
       initiatedBy: 'parent-1',
@@ -381,7 +393,7 @@ describe('revokeOrModifyRelationship / handleSoleGuardianRemoval', () => {
   it('[Phase 4 — Review §6.4] non-sole-guardian removal is audit-logged with action GUARDIAN_REMOVED', async () => {
     (prisma.parentStudentRelationship.findUnique as any).mockResolvedValue({
       id: 'rel-1',
-      parentId: 'parent-1',
+      parentId: 'parent-profile-1',
       studentProfileId: 'sp-1',
       relationshipType: 'MANDATORY_GUARDIAN',
       initiatedBy: 'parent-1',
@@ -402,7 +414,7 @@ describe('revokeOrModifyRelationship / handleSoleGuardianRemoval', () => {
   it('a guardian revokes the sole mandatory relationship — triggers GUARDIAN_REQUIRED_HOLD', async () => {
     (prisma.parentStudentRelationship.findUnique as any).mockResolvedValue({
       id: 'rel-1',
-      parentId: 'parent-1',
+      parentId: 'parent-profile-1',
       studentProfileId: 'sp-1',
       relationshipType: 'MANDATORY_GUARDIAN',
       initiatedBy: 'parent-1',
@@ -432,7 +444,7 @@ describe('revokeOrModifyRelationship / handleSoleGuardianRemoval', () => {
   it('sole-guardian removal preserves all student data — no delete call is made against any student-owned table', async () => {
     (prisma.parentStudentRelationship.findUnique as any).mockResolvedValue({
       id: 'rel-1',
-      parentId: 'parent-1',
+      parentId: 'parent-profile-1',
       studentProfileId: 'sp-1',
       relationshipType: 'MANDATORY_GUARDIAN',
       initiatedBy: 'parent-1',
@@ -455,7 +467,7 @@ describe('revokeOrModifyRelationship / handleSoleGuardianRemoval', () => {
   it('a Grade 1–5 student attempting to revoke their own mandatory guardian is rejected', async () => {
     (prisma.parentStudentRelationship.findUnique as any).mockResolvedValue({
       id: 'rel-1',
-      parentId: 'parent-1',
+      parentId: 'parent-profile-1',
       studentProfileId: 'student-1',
       relationshipType: 'MANDATORY_GUARDIAN',
       initiatedBy: 'parent-1',
@@ -472,7 +484,7 @@ describe('revokeOrModifyRelationship / handleSoleGuardianRemoval', () => {
   it('a Grade 6–12 student revoking a relationship they did not initiate is rejected', async () => {
     (prisma.parentStudentRelationship.findUnique as any).mockResolvedValue({
       id: 'rel-2',
-      parentId: 'parent-1',
+      parentId: 'parent-profile-1',
       studentProfileId: 'student-1',
       relationshipType: 'OPTIONAL_GUARDIAN',
       initiatedBy: 'parent-1',
@@ -515,7 +527,7 @@ describe('revokeOrModifyRelationship / handleSoleGuardianRemoval', () => {
   it('modify-permissions-only (no revoke) never triggers handleSoleGuardianRemoval, even for a sole-guardian relationship', async () => {
     (prisma.parentStudentRelationship.findUnique as any).mockResolvedValue({
       id: 'rel-1',
-      parentId: 'parent-1',
+      parentId: 'parent-profile-1',
       studentProfileId: 'sp-1',
       relationshipType: 'MANDATORY_GUARDIAN',
       initiatedBy: 'parent-1',
@@ -536,7 +548,7 @@ describe('revokeOrModifyRelationship / handleSoleGuardianRemoval', () => {
   it('[Phase 4 — Review §6.4] sole-guardian removal writes an audit log entry, independent of the hold-state assertion', async () => {
     (prisma.parentStudentRelationship.findUnique as any).mockResolvedValue({
       id: 'rel-1',
-      parentId: 'parent-1',
+      parentId: 'parent-profile-1',
       studentProfileId: 'sp-1',
       relationshipType: 'MANDATORY_GUARDIAN',
       initiatedBy: 'parent-1',
@@ -556,5 +568,18 @@ describe('revokeOrModifyRelationship / handleSoleGuardianRemoval', () => {
     expect(recordAuditLog).toHaveBeenCalledWith(
       expect.objectContaining({ actor: 'parent-1', action: 'GUARDIAN_REMOVED', target: 'rel-1' }),
     );
+  });
+
+  it('a parent who is not party to an existing relationship cannot revoke it — IDOR', async () => {
+    (prisma.parentStudentRelationship.findUnique as any).mockResolvedValue({
+      id: 'rel-1',
+      parentId: 'someone-elses-profile',
+      relationshipType: 'MANDATORY_GUARDIAN',
+    });
+
+    await expect(
+      revokeOrModifyRelationship('parent-x', 'PARENT', 'rel-1', { revoke: true } as any),
+    ).rejects.toMatchObject({ statusCode: 403 });
+    expect(prisma.parentStudentRelationship.update).not.toHaveBeenCalled();
   });
 });

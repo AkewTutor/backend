@@ -10,7 +10,7 @@ export const listUsers = asyncHandler(
     const limit = parseInt(req.query.limit as string, 10) || 20;
 
     const result = await adminPeopleService.listUsers(role, search, page, limit);
-    res.status(200).json(result);
+    res.status(200).json({ statusCode: 200, success: true, message: 'OK', data: result });
   },
 );
 
@@ -18,14 +18,14 @@ export const manageRelationshipRecords = asyncHandler(
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     const relationshipId = req.params.relationshipId as string;
     const adminId = (req as any).user.id;
-    const updates = req.body;
+    const updates = req.body ?? {};
 
     const result = await adminPeopleService.manageRelationshipRecords(
       relationshipId,
       adminId,
       updates,
     );
-    res.status(200).json(result);
+    res.status(200).json({ statusCode: 200, success: true, message: 'OK', data: result });
   },
 );
 
@@ -33,7 +33,7 @@ export const suspendAccount = asyncHandler(
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     const userId = req.params.userId as string;
     const adminId = (req as any).user.id;
-    const { reason, restrictionType } = req.body;
+    const { reason, restrictionType } = req.body ?? {};
 
     const result = await adminPeopleService.suspendAccount(
       userId,
@@ -41,6 +41,6 @@ export const suspendAccount = asyncHandler(
       reason,
       restrictionType,
     );
-    res.status(200).json(result);
+    res.status(200).json({ statusCode: 200, success: true, message: 'OK', data: result });
   },
 );

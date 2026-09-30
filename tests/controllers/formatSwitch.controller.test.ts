@@ -1,3 +1,6 @@
+vi.mock('../../src/utils/profileIds.js', () => ({
+  resolveCallerProfileId: async (u: { id: string }) => u.id,
+}));
 /**
  * tests/controllers/formatSwitch.controller.test.ts
  *

@@ -25,6 +25,11 @@ enum NotifChannel {
   EMAIL
 }
 
+enum VerificationCodePurpose {
+  CONTACT_VERIFICATION
+  PASSWORD_RESET
+}
+
 enum NotificationStatus {
   QUEUED
   SENT
@@ -151,6 +156,7 @@ model User {
   verifiedTutors TutorProfile[] @relation("TutorVerifiedBy")
 
   refreshTokens                 RefreshToken[]
+  verificationCodes             VerificationCode[]
   notifications                 Notification[]
   publishedPolicies             PolicyDocument[]
   auditLogs                     AuditLog[]
@@ -268,6 +274,26 @@ model RefreshToken {
 
   @@index([userId, revokedAt])
   @@index([familyId])
+}
+
+// Backs verifyContact / resendVerification / requestPasswordReset /
+// resetPassword. Only a hash of the code is stored, never the
+// plaintext — the same pattern RefreshToken uses for tokenHash. A code
+// is single-use (consumedAt) and time-limited (expiresAt); the service
+// layer is responsible for treating any older unconsumed row of the
+// same purpose as superseded when a new one is issued.
+model VerificationCode {
+  id         String                  @id @default(uuid())
+  userId     String
+  purpose    VerificationCodePurpose
+  codeHash   String
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime                @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, purpose, consumedAt])
 }
 
 model Notification {

@@ -1,14 +1,29 @@
 import { prisma } from '../config/db.js';
 import ApiError from '../utils/ApiError.js';
 
+/**
+ * AvailabilitySlot.tutorId is a FK to TutorProfile.id, but callers hold a
+ * User id (req.user.id). Always resolve the profile first.
+ */
+async function profileIdFor(userId: string): Promise<string> {
+  const profile = await prisma.tutorProfile.findUnique({
+    where: { userId },
+    select: { id: true },
+  });
+  if (!profile) {
+    throw new ApiError(403, 'Tutor profile not found');
+  }
+  return profile.id;
+}
+
 export async function setSlots(
-  tutorId: string,
+  userId: string,
   input: { dayOfWeek?: number; startTime: Date; endTime: Date; isRecurring: boolean },
 ) {
   if (new Date(input.endTime) <= new Date(input.startTime)) {
     throw new ApiError(400, 'End time must be after start time');
   }
-
+  const tutorId = await profileIdFor(userId);
   return prisma.availabilitySlot.create({
     data: {
       tutorId,
@@ -20,33 +35,47 @@ export async function setSlots(
   });
 }
 
-export async function listSlots(tutorId: string) {
+export async function listSlots(userId: string) {
+  const tutorId = await profileIdFor(userId);
   return prisma.availabilitySlot.findMany({
     where: { tutorId },
   });
 }
 
-export async function removeSlot(callerId: string, slotId: string) {
+const minutesOfDay = (d: Date) => d.getUTCHours() * 60 + d.getUTCMinutes();
+
+export async function removeSlot(userId: string, slotId: string) {
+  const tutorId = await profileIdFor(userId);
+
   const slot = await prisma.availabilitySlot.findUnique({
     where: { id: slotId },
   });
-
-  if (!slot || slot.tutorId !== callerId) {
+  if (!slot || slot.tutorId !== tutorId) {
     throw new ApiError(403, 'Not authorized to remove this slot');
   }
 
-  // Check for confirmed session
-  const overlappingSession = await (prisma as any).scheduledSession?.findFirst({
+  // ScheduledSession has no slotId/tutorId/CONFIRMED status, so "in use" means:
+  // an upcoming SCHEDULED session in one of this tutor's cohorts overlaps the slot.
+  const upcoming = await prisma.scheduledSession.findMany({
     where: {
-      tutorId: callerId,
-      status: 'CONFIRMED',
-      // The test only asserts that findFirst is called. We'll pass some overlap logic if we needed to, but just finding any CONFIRMED session for this slot conceptually.
-      slotId: slotId,
+      status: 'SCHEDULED',
+      scheduledStart: { gte: new Date() },
+      cohort: { tutorId },
     },
+    select: { scheduledStart: true, scheduledEnd: true },
   });
 
-  // If prisma.scheduledSession doesn't exist yet, it might return undefined. We mock it in tests.
-  if (overlappingSession) {
+  const inUse = upcoming.some((s) =>
+    slot.isRecurring
+      ? // recurring: same weekday (JS convention 0=Sunday) and overlapping time of day
+        s.scheduledStart.getUTCDay() === slot.dayOfWeek &&
+        minutesOfDay(s.scheduledStart) < minutesOfDay(slot.endTime) &&
+        minutesOfDay(s.scheduledEnd) > minutesOfDay(slot.startTime)
+      : // one-off: plain datetime overlap
+        s.scheduledStart < slot.endTime && s.scheduledEnd > slot.startTime,
+  );
+
+  if (inUse) {
     throw new ApiError(
       409,
       'This slot is in use by a confirmed session and cannot be removed until it is resolved',
@@ -56,6 +85,5 @@ export async function removeSlot(callerId: string, slotId: string) {
   await prisma.availabilitySlot.delete({
     where: { id: slotId },
   });
-
   return { id: slotId, deleted: true };
 }

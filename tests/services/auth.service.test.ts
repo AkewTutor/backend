@@ -40,6 +40,12 @@ vi.mock('../../src/config/db.js', () => ({
       update: vi.fn(),
       updateMany: vi.fn(),
     },
+    // Codes are now stored hashed in the VerificationCode table
+    verificationCode: {
+      create: vi.fn(),
+      findFirst: vi.fn(),
+      updateMany: vi.fn(),
+    },
   },
 }));
 
@@ -84,6 +90,7 @@ import {
   verifyContact,
 } from '../../src/services/auth.service.js';
 import ApiError from '../../src/utils/ApiError.js';
+import { hashVerificationCode } from '../../src/utils/verificationCode.js';
 
 function resetAllMocks() {
   vi.clearAllMocks();
@@ -94,6 +101,17 @@ function resetAllMocks() {
   (hashRefreshToken as any).mockReturnValue('hashed-refresh-token');
   (dispatchNotification as any).mockResolvedValue(undefined);
   (recordAuditLog as any).mockResolvedValue(undefined);
+  (prisma.verificationCode.findFirst as any).mockResolvedValue(null);
+  (prisma.verificationCode.updateMany as any).mockResolvedValue({ count: 1 });
+}
+
+/** Makes the newest unconsumed code for the user be `code`, unexpired. */
+function mockStoredCode(code: string, opts: { expired?: boolean } = {}) {
+  (prisma.verificationCode.findFirst as any).mockResolvedValue({
+    id: 'vc-1',
+    codeHash: hashVerificationCode(code),
+    expiresAt: new Date(Date.now() + (opts.expired ? -60_000 : 15 * 60_000)),
+  });
 }
 
 describe('registerUser', () => {
@@ -212,10 +230,14 @@ describe('registerUser', () => {
       termsAccepted: true,
     } as any);
 
-    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    // Call #1 is the registration transaction. (Call #2 is the verification-code
+    // issue transaction, which is also atomic but separate by design.)
+    expect(prisma.$transaction).toHaveBeenCalled();
     const arg = (prisma.$transaction as any).mock.calls[0][0];
     expect(Array.isArray(arg)).toBe(true);
     expect(arg.length).toBeGreaterThanOrEqual(2);
+    expect(prisma.user.create).toHaveBeenCalledTimes(1);
+    expect(prisma.studentProfile.create).toHaveBeenCalledTimes(1);
   });
 
   it('dispatches the verification code via the email channel when only email supplied', async () => {
@@ -430,6 +452,7 @@ describe('resetPassword', () => {
   beforeEach(() => resetAllMocks());
 
   it('valid, unexpired, unused code resolves and updates passwordHash', async () => {
+    mockStoredCode('valid-code');
     (prisma.user.update as any).mockResolvedValue({ id: 'user-1' });
     (prisma.refreshToken.updateMany as any).mockResolvedValue({ count: 2 });
 
@@ -438,9 +461,7 @@ describe('resetPassword', () => {
   });
 
   it('expired code throws ApiError(400)', async () => {
-    (prisma.user.update as any).mockRejectedValue(
-      new ApiError(400, 'This reset link is no longer valid — request a new one'),
-    );
+    mockStoredCode('expired-code', { expired: true });
 
     await expect(resetPassword('user-1', 'expired-code', 'newpassword123')).rejects.toMatchObject({
       statusCode: 400,
@@ -449,9 +470,8 @@ describe('resetPassword', () => {
   });
 
   it('already-used code throws the identical ApiError(400)', async () => {
-    (prisma.user.update as any).mockRejectedValue(
-      new ApiError(400, 'This reset link is no longer valid — request a new one'),
-    );
+    // consumed codes are excluded by the query (consumedAt: null) -> no row
+    (prisma.verificationCode.findFirst as any).mockResolvedValue(null);
 
     await expect(resetPassword('user-1', 'used-code', 'newpassword123')).rejects.toMatchObject({
       statusCode: 400,
@@ -460,9 +480,8 @@ describe('resetPassword', () => {
   });
 
   it('code belonging to a different userId throws the identical generic ApiError(400)', async () => {
-    (prisma.user.update as any).mockRejectedValue(
-      new ApiError(400, 'This reset link is no longer valid — request a new one'),
-    );
+    // lookup is scoped by userId -> other users' codes are never found
+    (prisma.verificationCode.findFirst as any).mockResolvedValue(null);
 
     await expect(
       resetPassword('user-B', 'someone-elses-code', 'newpassword123'),
@@ -473,6 +492,7 @@ describe('resetPassword', () => {
   });
 
   it('revokes all refresh tokens for the user (NFR-015)', async () => {
+    mockStoredCode('valid-code');
     (prisma.user.update as any).mockResolvedValue({ id: 'user-1' });
     (prisma.refreshToken.updateMany as any).mockResolvedValue({ count: 2 });
 
@@ -490,6 +510,7 @@ describe('verifyContact / resendVerification', () => {
   beforeEach(() => resetAllMocks());
 
   it('valid code verifies email and leaves phoneVerifiedAt untouched', async () => {
+    mockStoredCode('good-code');
     const now = new Date();
     (prisma.user.update as any).mockResolvedValue({ emailVerifiedAt: now, phoneVerifiedAt: null });
 
@@ -500,6 +521,7 @@ describe('verifyContact / resendVerification', () => {
   });
 
   it('valid code verifies phone', async () => {
+    mockStoredCode('good-code');
     const now = new Date();
     (prisma.user.update as any).mockResolvedValue({ emailVerifiedAt: null, phoneVerifiedAt: now });
 
@@ -509,9 +531,7 @@ describe('verifyContact / resendVerification', () => {
   });
 
   it('invalid or expired code throws ApiError(400)', async () => {
-    (prisma.user.update as any).mockRejectedValue(
-      new ApiError(400, 'Invalid or expired code — request a new one'),
-    );
+    mockStoredCode('the-real-code'); // stored code differs from the submitted 'bad-code'
 
     await expect(verifyContact('user-1', 'bad-code')).rejects.toMatchObject({
       statusCode: 400,

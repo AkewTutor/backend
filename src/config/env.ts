@@ -12,6 +12,11 @@ const envSchema = z
     JWT_SECRET: z.string(),
     // NFR-014 — 30-minute access-token TTL (Doc 05a §9).
     JWT_EXPIRES_IN: z.string().default('30m'),
+    // How long a contact-verification / password-reset code stays valid
+    // after it's issued. No NFR pins this number; 15 minutes matches the
+    // resend-verification/forgot-password rate-limit windows (NFR-013)
+    // so a user who's rate-limited never has an already-expired code.
+    VERIFICATION_CODE_TTL_MINUTES: z.coerce.number().int().positive().default(15),
     BCRYPT_SALT_ROUNDS: z.string().default('10'),
     CLIENT_URL: z.string().default('http://localhost:3000'),
 

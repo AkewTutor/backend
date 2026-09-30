@@ -23,6 +23,7 @@ export const noExactMatchSchema = z.object({
   body: z
     .object({
       studentId: z.string().uuid().optional(),
+      subjectId: z.string().uuid().optional(),
     })
     .default({}),
 });
