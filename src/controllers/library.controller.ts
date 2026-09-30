@@ -3,10 +3,11 @@ import { SuccessResponse } from '../utils/ApiResponse.js';
 import { HTTP_STATUS } from '../constants/index.js';
 import * as libraryService from '../services/library.service.js';
 import ApiError from '../utils/ApiError.js';
+import { resolveCallerProfileId } from '../utils/profileIds.js';
 
 export const upload = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { id: tutorId } = (req as any).user;
+    const tutorId = await resolveCallerProfileId((req as any).user);
     const { cohortId, title, fileType } = req.body;
     const file = req.file;
     if (!file) {
@@ -30,7 +31,7 @@ export const upload = async (req: Request, res: Response, next: NextFunction) =>
 
 export const listForCohort = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { id } = (req as any).user;
+    const id = await resolveCallerProfileId((req as any).user);
     const cohortId = req.params.cohortId as string;
     const result = await libraryService.listCohortMaterials(id, cohortId);
     res.status(HTTP_STATUS.OK).json(new SuccessResponse(HTTP_STATUS.OK, 'OK', result));

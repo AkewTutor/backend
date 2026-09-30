@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * AkewTutor Postman bootstrap  (Stage 1: collection 02)
+ * AkewTutor Postman bootstrap  (fixtures for collections 02, 03 and 04)
  *
  * Place at:  backend/scripts/postman-bootstrap.mjs
  * Run from:  backend/   ->   node scripts/postman-bootstrap.mjs --env ../postman/AkewTutor.postman_environment.json
@@ -243,6 +243,127 @@ try {
 
   step('Throwaway user for the suspend test');
   out.targetUserId = (await makeUser('student', 'suspendme', { extra: { grade: 10 } })).userId;
+
+  // ── Class delivery & library fixtures (collection 04) ─────────────
+  // Everything here uses dedicated `delivery*` personas/variables, so collections
+  // 01-03 (which own studentToken/tutorToken/cohortId/...) behave exactly as before.
+  step('Class-delivery fixtures (04): approved tutor + student, cohorts, sessions, thread, recordings, material');
+  const dTutor = await makeUser('tutor', 'deliverytutor');
+  const dStudent = await makeUser('student', 'deliverystudent', { extra: { grade: 8 } });
+  const dTutorProfileId = await tutorProfileId(dTutor.userId);
+  await api('POST', `/admin/tutors/${dTutorProfileId}/approve`, { token: A });
+  const dStudentProfileId = (
+    await one('select id from "StudentProfile" where "userId" = $1', [dStudent.userId])
+  ).id;
+  out.deliveryTutorToken = dTutor.token;
+  out.deliveryStudentToken = dStudent.token;
+  out.deliveryTutorProfileId = dTutorProfileId;
+  out.deliveryStudentProfileId = dStudentProfileId;
+
+  // Recurring weekly availability: Sundays 08:00-12:00 UTC (2026-11-01 is a Sunday).
+  // The reschedule tests request 09:00 (inside) and 03:00 (outside) on that day.
+  await one(
+    `insert into "AvailabilitySlot" (id, "tutorId", "dayOfWeek", "startTime", "endTime", "isRecurring")
+     values (gen_random_uuid(), $1, 0, '2026-11-01T08:00:00Z', '2026-11-01T12:00:00Z', true)
+     returning id`,
+    [dTutorProfileId],
+  );
+
+  const mkDeliveryCohort = async () =>
+    (
+      await one(
+        `insert into "Cohort" (id, "tutorId", "subjectId", status, format, "sessionsPerWeek", "updatedAt")
+         values (gen_random_uuid(), $1, $2, 'ACTIVE'::"CohortStatus", 'ONE_TO_ONE', 1, now()) returning id`,
+        [dTutorProfileId, out.subjectId1],
+      )
+    ).id;
+  const mkMembership = async (cohortId, status) =>
+    (
+      await one(
+        `insert into "CohortMembership" (id, "cohortId", "studentId", status, "updatedAt")
+         values (gen_random_uuid(), $1, $2, $3::"MembershipStatus", now()) returning id`,
+        [cohortId, dStudentProfileId, status],
+      )
+    ).id;
+  const mkThread = async (cohortId, status) =>
+    (
+      await one(
+        `insert into "MessageThread" (id, "cohortId", status)
+         values (gen_random_uuid(), $1, $2::"ThreadStatus") returning id`,
+        [cohortId, status],
+      )
+    ).id;
+  // offsetHours is relative to now; sessions last one hour.
+  const mkSession = async (cohortId, status, offsetHours) =>
+    (
+      await one(
+        `insert into "ScheduledSession" (id, "cohortId", "scheduledStart", "scheduledEnd", status, "updatedAt")
+         values (gen_random_uuid(), $1,
+                 now() + $2::int * interval '1 hour',
+                 now() + $2::int * interval '1 hour' + interval '1 hour',
+                 $3::"SessionStatus", now())
+         returning id`,
+        [cohortId, offsetHours, status],
+      )
+    ).id;
+
+  // Main delivery cohort: ACTIVE, student has an ACTIVE membership, thread is open.
+  out.deliveryCohortId = await mkDeliveryCohort();
+  out.deliveryMembershipId = await mkMembership(out.deliveryCohortId, 'ACTIVE');
+  out.deliveryThreadId = await mkThread(out.deliveryCohortId, 'ACTIVE');
+
+  // Messaging: membership still PENDING_PAYMENT -> "messaging not available" (403).
+  out.deliveryInactiveCohortId = await mkDeliveryCohort();
+  await mkMembership(out.deliveryInactiveCohortId, 'PENDING_PAYMENT');
+
+  // Messaging: healthy membership but the admin already closed the thread (403).
+  out.deliveryClosedThreadCohortId = await mkDeliveryCohort();
+  await mkMembership(out.deliveryClosedThreadCohortId, 'ACTIVE');
+  await mkThread(out.deliveryClosedThreadCohortId, 'CLOSED_BY_ADMIN');
+
+  // Sessions (all in the main cohort). Upcoming one is >12h away so it is a free reschedule.
+  out.deliverySessionId = await mkSession(out.deliveryCohortId, 'SCHEDULED', 72);
+  out.deliveryCompletedSessionId = await mkSession(out.deliveryCohortId, 'COMPLETED', -48);
+  out.deliveryMissSessionId = await mkSession(out.deliveryCohortId, 'MISSED', -96);
+  await one(
+    `insert into "SessionMiss" (id, "sessionId", "causedBy", "missType")
+     values (gen_random_uuid(), $1, 'STUDENT'::"MissCause", 'NO_SHOW'::"MissType") returning id`,
+    [out.deliveryMissSessionId],
+  );
+
+  // Recordings on their own sessions (Recording.sessionId is unique, and the collection
+  // uploads a brand-new recording for deliverySessionId). One valid, one expired.
+  const recSession = await mkSession(out.deliveryCohortId, 'COMPLETED', -72);
+  const expiredRecSession = await mkSession(out.deliveryCohortId, 'COMPLETED', -2400);
+  const mkRecording = async (sessionId, expiresInterval) =>
+    (
+      await one(
+        `insert into "Recording" (id, "sessionId", "storageKey", "fileSizeBytes", "expiresAt")
+         values (gen_random_uuid(), $1, $2, 1024, now() + $3::interval) returning id`,
+        [sessionId, `recordings/bootstrap/${sessionId}.mp4`, expiresInterval],
+      )
+    ).id;
+  out.deliveryRecordingId = await mkRecording(recSession, '30 days');
+  out.deliveryExpiredRecordingId = await mkRecording(expiredRecSession, '-1 day');
+
+  // Recording consent: the tutor has already acknowledged; the collection's
+  // "Acknowledge consent - success" (student) completes it, which unlocks uploads.
+  await one(
+    `insert into "RecordingConsent" (id, "tutorId", "studentId", "tutorAcknowledgedAt")
+     values (gen_random_uuid(), $1, $2, now()) returning id`,
+    [dTutorProfileId, dStudentProfileId],
+  );
+
+  // A library material for the admin-override tests.
+  out.deliveryMaterialId = (
+    await one(
+      `insert into "LibraryMaterial" (id, "cohortId", "uploadedByTutorId", title, "fileUrl", "fileType")
+       values (gen_random_uuid(), $1, $2, 'Bootstrap worksheet',
+               'https://r2.akewtutor.com/library/bootstrap.pdf', 'PDF'::"MaterialFileType")
+       returning id`,
+      [out.deliveryCohortId, dTutorProfileId],
+    )
+  ).id;
 
   // ── write env ─────────────────────────────────────────────────────
   for (const [key, value] of Object.entries(out)) {

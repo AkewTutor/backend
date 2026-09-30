@@ -21,8 +21,13 @@ export async function submitAssessment(
     throw new ApiError(403, 'Not authorized');
   }
 
+  const weekStart = new Date(weekStartDate);
+  if (Number.isNaN(weekStart.getTime())) {
+    throw new ApiError(400, 'weekStartDate must be a valid date');
+  }
+
   const existing = await prisma.weeklyAssessment.findFirst({
-    where: { cohortMembershipId, weekStartDate },
+    where: { cohortMembershipId, weekStartDate: weekStart },
   });
 
   if (existing) {
@@ -32,7 +37,7 @@ export async function submitAssessment(
   return prisma.weeklyAssessment.create({
     data: {
       cohortMembershipId,
-      weekStartDate,
+      weekStartDate: weekStart,
       tutorFeedback,
       scoreSummary,
       submittedByTutorId: tutorId,

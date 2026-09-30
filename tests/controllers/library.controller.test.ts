@@ -8,6 +8,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Request, Response } from 'express';
 
+vi.mock('../../src/utils/profileIds.js', () => ({
+  resolveCallerProfileId: async (u: { id: string }) => u.id,
+}));
+
 vi.mock('../../src/services/library.service.js', () => ({
   uploadMaterial: vi.fn(),
   listCohortMaterials: vi.fn(),

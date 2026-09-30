@@ -8,6 +8,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import request from 'supertest';
 
+vi.mock('../../src/utils/profileIds.js', () => ({
+  resolveCallerProfileId: async (u: { id: string }) => u.id,
+}));
+
 vi.mock('../../src/services/session.service.js', () => ({
   listMySessions: vi.fn(),
   getSession: vi.fn(),

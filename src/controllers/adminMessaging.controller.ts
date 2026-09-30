@@ -19,7 +19,7 @@ export const closeThread = async (req: Request, res: Response, next: NextFunctio
   try {
     const { id: adminId } = (req as any).user;
     const threadId = String(req.params.threadId);
-    const { reason } = req.body;
+    const { reason } = req.body ?? {};
     const result = await adminMessagingService.closeThread(threadId, adminId, reason);
     res.status(HTTP_STATUS.OK).json(new SuccessResponse(HTTP_STATUS.OK, 'OK', result));
   } catch (error) {

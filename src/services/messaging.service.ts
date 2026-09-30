@@ -80,7 +80,12 @@ export async function listMessages(
   return { messages, page, limit, total };
 }
 
-export async function sendMessage(callerId: string, cohortId: string, body: string) {
+export async function sendMessage(
+  callerId: string,
+  cohortId: string,
+  body: string,
+  senderUserId = callerId,
+) {
   const cohort = await getCohortAndCheckAccess(callerId, cohortId);
 
   let thread = await prisma.messageThread.findUnique({ where: { cohortId } });
@@ -95,7 +100,7 @@ export async function sendMessage(callerId: string, cohortId: string, body: stri
   const message = await prisma.message.create({
     data: {
       threadId: thread.id,
-      senderId: callerId,
+      senderId: senderUserId,
       body,
     },
   });

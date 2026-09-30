@@ -76,9 +76,15 @@ export async function generateSessionsForCohort(cohortId: string): Promise<{ cre
 }
 
 export async function provideJitsiLink(tutorId: string, sessionId: string, jitsiLinkUrl: string) {
-  const session = await prisma.scheduledSession.findUnique({ where: { id: sessionId } });
+  const session = await prisma.scheduledSession.findUnique({
+    where: { id: sessionId },
+    include: { cohort: true },
+  });
   if (!session) throw new ApiError(404, 'Session not found');
-  if ((session as any).tutorId && (session as any).tutorId !== tutorId) {
+
+  // ScheduledSession has no tutorId column — the owning tutor is the cohort's tutor.
+  const ownerTutorId = (session as any).tutorId ?? (session as any).cohort?.tutorId;
+  if (ownerTutorId && ownerTutorId !== tutorId) {
     throw new ApiError(403, 'Not authorized to provide a link for this session');
   }
 
@@ -91,8 +97,8 @@ export async function provideJitsiLink(tutorId: string, sessionId: string, jitsi
     data: {
       jitsiLinkUrl,
       jitsiLinkSentAt: now,
-      providedLateNotice: providedLateNotice as any, // Not in schema, but test expects it in return
-    } as any,
+      // providedLateNotice is not a column — it is derived and returned below only.
+    },
   });
 
   // The test expects providedLateNotice in the return object even if not in DB.
@@ -128,8 +134,16 @@ export async function assertSessionAccessAllowed(
 }
 
 export async function markCompleted(tutorId: string, sessionId: string) {
-  const session = await prisma.scheduledSession.findUnique({ where: { id: sessionId } });
+  const session = await prisma.scheduledSession.findUnique({
+    where: { id: sessionId },
+    include: { cohort: true },
+  });
   if (!session) throw new ApiError(404, 'Session not found');
+
+  const ownerTutorId = (session as any).tutorId ?? (session as any).cohort?.tutorId;
+  if (ownerTutorId && ownerTutorId !== tutorId) {
+    throw new ApiError(403, 'Not authorized to complete this session');
+  }
 
   if (['COMPLETED', 'MISSED', 'CANCELLED'].includes(session.status)) {
     throw new ApiError(409, "This session's status cannot be changed");
@@ -160,7 +174,21 @@ export async function getSession(callerId: string, callerRole: string, sessionId
 
 // Stubs for future implementation
 export async function generateMakeupSession(sessionId: string): Promise<any> {
-  throw new Error('Not implemented');
+  const original = await prisma.scheduledSession.findUnique({ where: { id: sessionId } });
+  if (!original) throw new ApiError(404, 'Session not found');
+
+  // Makeup for a tutor-caused miss: same slot, one week later (7-day makeup window).
+  const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+  return prisma.scheduledSession.create({
+    data: {
+      cohortId: original.cohortId,
+      scheduledStart: new Date(original.scheduledStart.getTime() + WEEK_MS),
+      scheduledEnd: new Date(original.scheduledEnd.getTime() + WEEK_MS),
+      status: 'SCHEDULED',
+      isMakeup: true,
+      makeupForSessionId: sessionId,
+    },
+  });
 }
 
 export async function cancelSession(...args: any[]): Promise<any> {
