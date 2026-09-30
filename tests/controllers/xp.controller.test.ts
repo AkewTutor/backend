@@ -16,6 +16,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Request, Response } from 'express';
 
+vi.mock('../../src/utils/profileIds.js', () => ({
+  resolveGamificationCallerId: async (u: { id: string }) => u.id,
+}));
+
 vi.mock('../../src/services/xp.service.js', () => ({
   getMyProgress: vi.fn(),
   getLeaderboard: vi.fn(),

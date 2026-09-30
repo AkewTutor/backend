@@ -200,6 +200,13 @@ try {
     body: { password: DEFAULT_PW },
   });
   out.minorStudentToken = activated.accessToken ?? activated.token;
+  // Student that the MAIN parent actively guards (relD is ACTIVE after the
+  // activation above) — used by 05 "parent on behalf of student".
+  out.guardedStudentProfileId = (
+    await one('select \"studentId\" from \"ParentStudentRelationship\" where id = $1', [
+      relD.relationshipId,
+    ])
+  ).studentId;
 
   step('Matching & cohort fixtures (03)');
   const approvedTutorId = out.alreadyReviewedTutorId;

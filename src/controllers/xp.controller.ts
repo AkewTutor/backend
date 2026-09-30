@@ -3,10 +3,12 @@ import { SuccessResponse } from '../utils/ApiResponse.js';
 import { HTTP_STATUS } from '../constants/index.js';
 import * as xpService from '../services/xp.service.js';
 import ApiError from '../utils/ApiError.js';
+import { resolveGamificationCallerId } from '../utils/profileIds.js';
 
 export const getMyProgress = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { id: callerId, role: callerRole } = (req as any).user;
+    const callerRole = (req as any).user.role;
+    const callerId = await resolveGamificationCallerId((req as any).user);
     const studentId = req.query.studentId as string | undefined;
 
     if (callerRole === 'PARENT' && !studentId) {
@@ -22,7 +24,8 @@ export const getMyProgress = async (req: Request, res: Response, next: NextFunct
 
 export const getLeaderboard = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { id: callerId, role: callerRole } = (req as any).user;
+    const callerRole = (req as any).user.role;
+    const callerId = await resolveGamificationCallerId((req as any).user);
     const studentId = req.query.studentId as string | undefined;
     const period = req.query.period as 'WEEKLY' | 'MONTHLY' | undefined;
 

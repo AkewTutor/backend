@@ -8,6 +8,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import request from 'supertest';
 
+vi.mock('../../src/utils/profileIds.js', () => ({
+  resolveGamificationCallerId: async (u: { id: string }) => u.id,
+}));
+
 vi.mock('../../src/services/xp.service.js', () => ({
   getMyProgress: vi.fn(),
   getLeaderboard: vi.fn(),

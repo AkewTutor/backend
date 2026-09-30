@@ -8,7 +8,7 @@ export const gamificationXPRouter = Router();
 export const adminXPRouter = Router();
 
 // /api/v1/gamification (auth required for both)
-gamificationXPRouter.use(authMiddleware);
+gamificationXPRouter.use(authMiddleware, requireRole('STUDENT', 'PARENT'));
 gamificationXPRouter.get('/xp/me', getMyProgress);
 gamificationXPRouter.get('/leaderboard', getLeaderboard);
 
