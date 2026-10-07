@@ -114,7 +114,7 @@ export async function resetPassword(
   next: NextFunction,
 ): Promise<void> {
   try {
-    await authService.resetPassword(req.body.userId, req.body.code, req.body.newPassword);
+    await authService.resetPassword(req.body.identifier, req.body.code, req.body.newPassword);
     send(res, 200, {});
   } catch (err) {
     next(err);

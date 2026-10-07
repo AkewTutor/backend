@@ -393,6 +393,12 @@ export async function login(
     throw invalidCredentialsError();
   }
 
+  const verified = user.email === identifier ? user.emailVerifiedAt : user.phoneVerifiedAt;
+  if (!verified) {
+    await resendVerification(user.id).catch(() => undefined);
+    throw new ApiError(403, 'Please verify your email/phone before signing in', [user.id]);
+  }
+
   // Successful login — reset the consecutive-failure counter, but only
   // when it's non-zero, to avoid a write on every login. Guarded against
   // a user shape that doesn't carry the field (unit-test fixture).
@@ -572,29 +578,36 @@ export async function requestPasswordReset(identifier: string): Promise<void> {
 }
 
 export async function resetPassword(
-  userId: string,
+  identifier: string,
   code: string,
   newPassword: string,
 ): Promise<void> {
-  const ok = await consumeVerificationCode(userId, 'PASSWORD_RESET', code);
-  if (!ok) {
-    throw new ApiError(400, 'This reset link is no longer valid — request a new one');
-  }
+  // Unknown identifier and bad code return the identical 400 (no account enumeration).
+  const invalid = () => new ApiError(400, 'Invalid or expired reset code — request a new one');
+
+  const user = await prisma.user.findFirst({
+    where: { OR: [{ email: identifier }, { phone: identifier }] },
+    select: { id: true },
+  });
+  if (!user) throw invalid();
+
+  const ok = await consumeVerificationCode(user.id, 'PASSWORD_RESET', code);
+  if (!ok) throw invalid();
 
   const passwordHash = await hashPassword(newPassword);
 
   try {
     await prisma.user.update({
-      where: { id: userId },
+      where: { id: user.id },
       data: { passwordHash },
     });
   } catch (err) {
     if (err instanceof ApiError) throw err;
-    throw new ApiError(400, 'This reset link is no longer valid — request a new one');
+    throw invalid();
   }
 
   // NFR-015 — a password reset invalidates every existing session.
-  await logoutAll(userId);
+  await logoutAll(user.id);
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -611,9 +624,16 @@ export async function verifyContact(
   }
 
   try {
+    const existing = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true },
+    });
+    // Same channel rule as resendVerification: email if the account has one, otherwise phone.
+    const field = existing?.email ? 'emailVerifiedAt' : 'phoneVerifiedAt';
+
     const updated = await prisma.user.update({
       where: { id: userId },
-      data: { emailVerifiedAt: new Date() },
+      data: { [field]: new Date() },
       select: { emailVerifiedAt: true, phoneVerifiedAt: true },
     });
     return {

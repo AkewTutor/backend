@@ -47,7 +47,7 @@ app.use(defaultLimiter);
 // 📦 Body Parsing Configurations
 app.use(
   express.json({
-    limit: '10kb',
+    limit: '100kb',
     verify: (req: any, res: any, buf: Buffer) => {
       req.rawBody = buf;
     },

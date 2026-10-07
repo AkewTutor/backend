@@ -124,18 +124,18 @@ describe('adjustNotificationRules (list announcements)', () => {
 
     const result = await adjustNotificationRules(1, 20);
 
-    expect(result.items.length).toBe(1);
+    expect(result.announcements.length).toBe(1);
     expect(result.page).toBe(1);
     expect(result.limit).toBe(20);
   });
 
-  it('no announcements yet resolves { items: [], page, limit, total: 0 }, not an error', async () => {
+  it('no announcements yet resolves { announcements: [], page, limit, total: 0 }, not an error', async () => {
     (prisma as any).announcement.findMany.mockResolvedValue([]);
     (prisma as any).announcement.count.mockResolvedValue(0);
 
     const result = await adjustNotificationRules(1, 20);
 
-    expect(result.items).toEqual([]);
+    expect(result.announcements).toEqual([]);
     expect(result.total).toBe(0);
   });
 });

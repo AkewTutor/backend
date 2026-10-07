@@ -66,7 +66,7 @@ describe('adminAnnouncement.controller.ts', () => {
 
   it('listAnnouncements delegates with pagination params', async () => {
     (adminAnnouncementService.adjustNotificationRules as any).mockResolvedValue({
-      items: [],
+      announcements: [],
       page: 1,
       limit: 20,
       total: 0,

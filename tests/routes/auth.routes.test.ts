@@ -70,7 +70,10 @@ describe('auth.routes.ts — public/authenticated boundary', () => {
     ['/api/v1/auth/verify-contact', { userId: 'u1', code: '123456' }],
     ['/api/v1/auth/resend-verification', { userId: 'u1' }],
     ['/api/v1/auth/forgot-password', { identifier: 'stu@example.com' }],
-    ['/api/v1/auth/reset-password', { userId: 'u1', code: 'c', newPassword: 'newpassword123' }],
+    [
+      '/api/v1/auth/reset-password',
+      { identifier: 'me@example.com', code: 'c', newPassword: 'newpassword123' },
+    ],
   ])('%s requires no auth', async (path, body) => {
     const res = await request(app).post(path).send(body);
 

@@ -18,7 +18,7 @@ export interface AnnouncementDTO {
 }
 
 export interface PaginatedAnnouncementsDTO {
-  items: unknown[];
+  announcements: unknown[];
   page: number;
   limit: number;
   total: number;
@@ -116,5 +116,5 @@ export async function adjustNotificationRules(
     prisma.announcement.count(),
   ]);
 
-  return { items, page: safePage, limit: safeLimit, total };
+  return { announcements: items, page: safePage, limit: safeLimit, total };
 }
