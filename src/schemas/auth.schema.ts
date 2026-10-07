@@ -48,14 +48,14 @@ export const refreshSchema = z.object({
 
 export const passwordResetRequestSchema = z.object({
   body: z.object({
-    identifier: z.string().min(1),
+    identifier: z.string().trim().min(1),
   }),
 });
 
 export const passwordResetSchema = z.object({
   body: z.object({
-    userId: z.string().uuid(),
-    code: z.string().min(1),
+    identifier: z.string().trim().min(1),
+    code: z.string().trim().min(1),
     newPassword: z.string().min(8),
   }),
 });

@@ -310,7 +310,39 @@ describe('login', () => {
     phone: null,
     passwordHash: '$2b$04$dummyhash',
     accountStatus: 'ACTIVE',
+    emailVerifiedAt: new Date(),
+    phoneVerifiedAt: new Date(),
   };
+
+  it('correct password but unverified contact → 403 with userId, and no tokens issued', async () => {
+    (prisma.user.findFirst as any).mockResolvedValue({
+      ...activeUser,
+      emailVerifiedAt: null,
+      phoneVerifiedAt: null,
+    });
+    (comparePassword as any).mockResolvedValue(true);
+
+    await expect(login('stu@example.com', 'correctpassword')).rejects.toMatchObject({
+      statusCode: 403,
+      errors: ['user-1'],
+    });
+    expect(prisma.refreshToken.create).not.toHaveBeenCalled();
+  });
+
+  it('wrong password on an unverified account → still the generic 401 (no account leak)', async () => {
+    (prisma.user.findFirst as any).mockResolvedValue({
+      ...activeUser,
+      emailVerifiedAt: null,
+      phoneVerifiedAt: null,
+    });
+    (comparePassword as any).mockResolvedValue(false);
+    (prisma.user.update as any).mockResolvedValue({ ...activeUser, failedLoginCount: 1 });
+
+    await expect(login('stu@example.com', 'wrongpassword')).rejects.toMatchObject({
+      statusCode: 401,
+      message: 'Invalid email/phone or password',
+    });
+  });
 
   it('valid credentials by email resolve { accessToken, refreshToken, user }', async () => {
     (prisma.user.findFirst as any).mockResolvedValue(activeUser);
@@ -449,23 +481,30 @@ describe('requestPasswordReset', () => {
 });
 
 describe('resetPassword', () => {
-  beforeEach(() => resetAllMocks());
+  beforeEach(() => {
+    resetAllMocks();
+    (prisma.user.findFirst as any).mockResolvedValue({ id: 'user-1' });
+  });
 
   it('valid, unexpired, unused code resolves and updates passwordHash', async () => {
     mockStoredCode('valid-code');
     (prisma.user.update as any).mockResolvedValue({ id: 'user-1' });
     (prisma.refreshToken.updateMany as any).mockResolvedValue({ count: 2 });
 
-    await expect(resetPassword('user-1', 'valid-code', 'newpassword123')).resolves.toBeUndefined();
+    await expect(
+      resetPassword('stu@example.com', 'valid-code', 'newpassword123'),
+    ).resolves.toBeUndefined();
     expect(hashPassword).toHaveBeenCalledWith('newpassword123');
   });
 
   it('expired code throws ApiError(400)', async () => {
     mockStoredCode('expired-code', { expired: true });
 
-    await expect(resetPassword('user-1', 'expired-code', 'newpassword123')).rejects.toMatchObject({
+    await expect(
+      resetPassword('stu@example.com', 'expired-code', 'newpassword123'),
+    ).rejects.toMatchObject({
       statusCode: 400,
-      message: 'This reset link is no longer valid — request a new one',
+      message: 'Invalid or expired reset code — request a new one',
     });
   });
 
@@ -473,9 +512,11 @@ describe('resetPassword', () => {
     // consumed codes are excluded by the query (consumedAt: null) -> no row
     (prisma.verificationCode.findFirst as any).mockResolvedValue(null);
 
-    await expect(resetPassword('user-1', 'used-code', 'newpassword123')).rejects.toMatchObject({
+    await expect(
+      resetPassword('stu@example.com', 'used-code', 'newpassword123'),
+    ).rejects.toMatchObject({
       statusCode: 400,
-      message: 'This reset link is no longer valid — request a new one',
+      message: 'Invalid or expired reset code — request a new one',
     });
   });
 
@@ -484,10 +525,21 @@ describe('resetPassword', () => {
     (prisma.verificationCode.findFirst as any).mockResolvedValue(null);
 
     await expect(
-      resetPassword('user-B', 'someone-elses-code', 'newpassword123'),
+      resetPassword('other@example.com', 'someone-elses-code', 'newpassword123'),
     ).rejects.toMatchObject({
       statusCode: 400,
-      message: 'This reset link is no longer valid — request a new one',
+      message: 'Invalid or expired reset code — request a new one',
+    });
+  });
+
+  it('unknown identifier throws the identical generic ApiError(400)', async () => {
+    (prisma.user.findFirst as any).mockResolvedValue(null);
+
+    await expect(
+      resetPassword('nobody@example.com', 'any-code', 'newpassword123'),
+    ).rejects.toMatchObject({
+      statusCode: 400,
+      message: 'Invalid or expired reset code — request a new one',
     });
   });
 
@@ -496,7 +548,7 @@ describe('resetPassword', () => {
     (prisma.user.update as any).mockResolvedValue({ id: 'user-1' });
     (prisma.refreshToken.updateMany as any).mockResolvedValue({ count: 2 });
 
-    await resetPassword('user-1', 'valid-code', 'newpassword123');
+    await resetPassword('stu@example.com', 'valid-code', 'newpassword123');
 
     expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -512,22 +564,29 @@ describe('verifyContact / resendVerification', () => {
   it('valid code verifies email and leaves phoneVerifiedAt untouched', async () => {
     mockStoredCode('good-code');
     const now = new Date();
+    (prisma.user.findUnique as any).mockResolvedValue({ email: 'stu@example.com' });
     (prisma.user.update as any).mockResolvedValue({ emailVerifiedAt: now, phoneVerifiedAt: null });
 
     const result = await verifyContact('user-1', 'good-code');
 
     expect(result.emailVerifiedAt).toBeTruthy();
     expect(result.phoneVerifiedAt).toBeNull();
+    expect((prisma.user.update as any).mock.calls[0][0].data).toHaveProperty('emailVerifiedAt');
+    expect((prisma.user.update as any).mock.calls[0][0].data).not.toHaveProperty('phoneVerifiedAt');
   });
 
   it('valid code verifies phone', async () => {
     mockStoredCode('good-code');
     const now = new Date();
+    (prisma.user.findUnique as any).mockResolvedValue({ email: null });
     (prisma.user.update as any).mockResolvedValue({ emailVerifiedAt: null, phoneVerifiedAt: now });
 
     const result = await verifyContact('user-1', 'good-code');
 
     expect(result.phoneVerifiedAt).toBeTruthy();
+    // Regression: a phone-only account must set phoneVerifiedAt, never emailVerifiedAt.
+    expect((prisma.user.update as any).mock.calls[0][0].data).toHaveProperty('phoneVerifiedAt');
+    expect((prisma.user.update as any).mock.calls[0][0].data).not.toHaveProperty('emailVerifiedAt');
   });
 
   it('invalid or expired code throws ApiError(400)', async () => {
@@ -555,6 +614,8 @@ describe('login / refreshAccessToken / logout / logoutAll (refresh-token flow)',
       id: 'user-1',
       role: 'STUDENT',
       passwordHash: '$2b$04$hash',
+      emailVerifiedAt: new Date(),
+      phoneVerifiedAt: new Date(),
     });
     (comparePassword as any).mockResolvedValue(true);
     (prisma.refreshToken.create as any).mockResolvedValue({ id: 'rt-1', familyId: 'fam-1' });

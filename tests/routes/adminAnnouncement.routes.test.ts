@@ -35,7 +35,7 @@ describe('adminAnnouncement.routes.ts', () => {
       createdAt: new Date().toISOString(),
     });
     (adminAnnouncementService.adjustNotificationRules as any).mockResolvedValue({
-      items: [],
+      announcements: [],
       page: 1,
       limit: 20,
       total: 0,

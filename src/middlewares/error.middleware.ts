@@ -15,6 +15,16 @@ const errorMiddleware = (err: Error, req: Request, res: Response, next: NextFunc
       .json(new ErrorResponse(err.statusCode, err.message, err.errors));
   }
 
+  // 2b. Body-parser errors are not ApiErrors; map them to proper client errors
+  // instead of letting them fall through to a misleading 500.
+  const bodyErrType = (err as { type?: string }).type;
+  if (bodyErrType === 'entity.too.large') {
+    return res.status(413).json(new ErrorResponse(413, 'Request body too large', []));
+  }
+  if (bodyErrType === 'entity.parse.failed') {
+    return res.status(400).json(new ErrorResponse(400, 'Malformed JSON body', []));
+  }
+
   // 3. Handle Unknown/Unexpected System Crashes (e.g., Database connection drops, syntax bugs)
   // 🛡️ Critical Security Step: Hide native system crash details from clients in production
   const errorMessage = 'Internal server error';

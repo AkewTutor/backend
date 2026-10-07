@@ -143,9 +143,11 @@ describe('auth.controller.ts', () => {
 
   it('resetPassword propagates its 400 unchanged', async () => {
     (authService.resetPassword as any).mockRejectedValue(
-      new ApiError(400, 'This reset link is no longer valid — request a new one'),
+      new ApiError(400, 'Invalid or expired reset code — request a new one'),
     );
-    const req = mockReq({ body: { userId: 'u1', code: 'bad', newPassword: 'newpassword123' } });
+    const req = mockReq({
+      body: { identifier: 'me@example.com', code: 'bad', newPassword: 'newpassword123' },
+    });
     const next = vi.fn();
 
     await resetPasswordController(req, mockRes(), next as NextFunction).catch(() => undefined);
