@@ -272,8 +272,22 @@ export async function getMyCohort(
   overrides: any,
 ): Promise<any> {
   const studentId = callerRole === 'STUDENT' ? callerId : overrides?.studentId || callerId;
-  const memberships = await prisma.cohortMembership.findMany({ where: { studentId } });
-  return { cohorts: memberships };
+  const memberships = await prisma.cohortMembership.findMany({
+    where: { studentId },
+    include: { cohort: true },
+  });
+  // 06-api/03 shape + cohortMembershipId (needed by /assessments).
+  return {
+    cohorts: memberships.map((m: any) => ({
+      cohortId: m.cohortId,
+      cohortMembershipId: m.id,
+      format: m.cohort?.format,
+      status: m.cohort?.status,
+      targetGroupSize: m.cohort?.targetGroupSize ?? null,
+      groupFormationWindowExpiresAt: m.cohort?.groupFormationWindowExpiresAt ?? null,
+      membershipStatus: m.status,
+    })),
+  };
 }
 
 export async function getCohortMembers(
@@ -283,7 +297,11 @@ export async function getCohortMembers(
 ): Promise<any> {
   const cohort = await prisma.cohort.findUnique({
     where: { id: cohortId },
-    include: { memberships: true, tutor: true },
+    include: {
+      memberships:
+        callerRole === 'TUTOR' ? { include: { student: { include: { user: true } } } } : true,
+      tutor: true,
+    },
   });
 
   if (!cohort) throw new ApiError(404, 'Cohort not found');
@@ -293,6 +311,20 @@ export async function getCohortMembers(
     (callerRole === 'TUTOR' && cohort?.tutorId === callerId);
   if (!isMember) throw new ApiError(403, 'Not authorized to view this cohort');
 
+  if (callerRole === 'TUTOR') {
+    // 06-api/03 tutor shape + cohortMembershipId (needed by POST /assessments).
+    return {
+      cohortId: cohort.id,
+      format: cohort.format,
+      students: (cohort.memberships as any[]).map((m) => ({
+        studentId: m.studentId,
+        cohortMembershipId: m.id,
+        firstName: m.student?.firstName ?? String(m.student?.user?.name ?? '').split(' ')[0],
+        grade: m.student?.grade,
+      })),
+    };
+  }
+
   const tutorResp = { ...cohort!.tutor } as any;
   if (cohort!.format !== 'ONE_TO_ONE' && callerRole === 'STUDENT') {
     delete tutorResp.educationInstitution;
@@ -301,10 +333,5 @@ export async function getCohortMembers(
     delete tutorResp.matchPercentage;
   }
 
-  const memsResp = cohort!.memberships.map((m) => {
-    if (callerRole === 'TUTOR') return { studentId: m.studentId, firstName: 'John', grade: 9 };
-    return m;
-  });
-
-  return { tutor: tutorResp, students: memsResp };
+  return { tutor: tutorResp, students: cohort!.memberships };
 }

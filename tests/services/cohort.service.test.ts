@@ -478,6 +478,35 @@ describe('getMyCohort / getCohortMembers', () => {
     expect(result).toEqual({ cohorts: [] });
   });
 
+  it('getMyCohort returns the documented shape including cohortMembershipId', async () => {
+    (prisma.cohortMembership.findMany as any).mockResolvedValue([
+      {
+        id: 'membership-1',
+        cohortId,
+        studentId,
+        status: 'PENDING_PAYMENT',
+        cohort: {
+          format: 'ONE_TO_THREE',
+          status: 'FORMING',
+          targetGroupSize: 3,
+          groupFormationWindowExpiresAt: null,
+        },
+      },
+    ]);
+
+    const result = await getMyCohort(studentId, 'STUDENT', undefined);
+
+    expect(result.cohorts[0]).toEqual({
+      cohortId,
+      cohortMembershipId: 'membership-1',
+      format: 'ONE_TO_THREE',
+      status: 'FORMING',
+      targetGroupSize: 3,
+      groupFormationWindowExpiresAt: null,
+      membershipStatus: 'PENDING_PAYMENT',
+    });
+  });
+
   it('non-member requests cohort details (IDOR) throws 403', async () => {
     (prisma.cohort.findUnique as any).mockResolvedValue({
       id: cohortId,
@@ -540,16 +569,32 @@ describe('getMyCohort / getCohortMembers', () => {
       tutorId,
       memberships: [
         {
+          id: 'membership-1',
           studentId,
-          student: { firstName: 'Bethel', grade: 6, budgetPreference: '300', school: 'AAU Prep' },
+          student: {
+            grade: 6,
+            budgetPreference: '300',
+            school: 'AAU Prep',
+            user: { name: 'Bethel Alemu' },
+          },
         },
       ],
     });
 
     const result = await getCohortMembers(cohortId, tutorId, 'TUTOR');
 
+    expect(result.cohortId).toBe(cohortId);
+    expect(result.format).toBe('ONE_TO_THREE');
     for (const member of result.students) {
-      expect(Object.keys(member).sort()).toEqual(['firstName', 'grade', 'studentId'].sort());
+      expect(Object.keys(member).sort()).toEqual(
+        ['cohortMembershipId', 'firstName', 'grade', 'studentId'].sort(),
+      );
     }
+    expect(result.students[0]).toEqual({
+      studentId,
+      cohortMembershipId: 'membership-1',
+      firstName: 'Bethel',
+      grade: 6,
+    });
   });
 });
