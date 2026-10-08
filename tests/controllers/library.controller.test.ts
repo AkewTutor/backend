@@ -10,6 +10,7 @@ import type { Request, Response } from 'express';
 
 vi.mock('../../src/utils/profileIds.js', () => ({
   resolveCallerProfileId: async (u: { id: string }) => u.id,
+  resolveGamificationCallerId: async (u: { id: string }) => `parent-profile-of-${u.id}`,
 }));
 
 vi.mock('../../src/services/library.service.js', () => ({
@@ -71,8 +72,8 @@ describe('library.controller.ts', () => {
     expect(res.status).toHaveBeenCalledWith(201);
   });
 
-  it('listForCohort delegates with (req.user.id, req.params.cohortId)', async () => {
-    (libraryService.listCohortMaterials as any).mockResolvedValue([]);
+  it('listForCohort delegates with (profile id, req.params.cohortId, role) and wraps the list as { materials }', async () => {
+    (libraryService.listCohortMaterials as any).mockResolvedValue([{ id: 'material-1' }]);
     const req = mockReq({
       params: { cohortId: 'cohort-1' },
       user: { id: 'student-1', role: 'STUDENT' },
@@ -81,8 +82,45 @@ describe('library.controller.ts', () => {
 
     await listForCohort(req, res, vi.fn());
 
-    expect(libraryService.listCohortMaterials).toHaveBeenCalledWith('student-1', 'cohort-1');
+    expect(libraryService.listCohortMaterials).toHaveBeenCalledWith(
+      'student-1',
+      'cohort-1',
+      'STUDENT',
+    );
     expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { materials: [{ id: 'material-1' }] } }),
+    );
+  });
+
+  it('listForCohort passes the Admin role through so the service can skip the membership check', async () => {
+    (libraryService.listCohortMaterials as any).mockResolvedValue([]);
+    const req = mockReq({
+      params: { cohortId: 'cohort-1' },
+      user: { id: 'admin-1', role: 'ADMIN' },
+    } as any);
+    const res = mockRes();
+
+    await listForCohort(req, res, vi.fn());
+
+    expect(libraryService.listCohortMaterials).toHaveBeenCalledWith('admin-1', 'cohort-1', 'ADMIN');
+  });
+
+  it('listForCohort resolves a Parent to their ParentProfile id', async () => {
+    (libraryService.listCohortMaterials as any).mockResolvedValue([]);
+    const req = mockReq({
+      params: { cohortId: 'cohort-1' },
+      user: { id: 'parent-user-1', role: 'PARENT' },
+    } as any);
+    const res = mockRes();
+
+    await listForCohort(req, res, vi.fn());
+
+    expect(libraryService.listCohortMaterials).toHaveBeenCalledWith(
+      'parent-profile-of-parent-user-1',
+      'cohort-1',
+      'PARENT',
+    );
   });
 
   it('adminOverride delegates with (req.params.id, req.user.id, req.body)', async () => {

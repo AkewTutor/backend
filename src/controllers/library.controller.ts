@@ -3,7 +3,7 @@ import { SuccessResponse } from '../utils/ApiResponse.js';
 import { HTTP_STATUS } from '../constants/index.js';
 import * as libraryService from '../services/library.service.js';
 import ApiError from '../utils/ApiError.js';
-import { resolveCallerProfileId } from '../utils/profileIds.js';
+import { resolveCallerProfileId, resolveGamificationCallerId } from '../utils/profileIds.js';
 
 export const upload = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -31,10 +31,15 @@ export const upload = async (req: Request, res: Response, next: NextFunction) =>
 
 export const listForCohort = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const id = await resolveCallerProfileId((req as any).user);
+    const user = (req as any).user;
+    // Parent -> ParentProfile.id; Student/Tutor -> role profile id; Admin passes through.
+    const id =
+      user.role === 'PARENT'
+        ? await resolveGamificationCallerId(user)
+        : await resolveCallerProfileId(user);
     const cohortId = req.params.cohortId as string;
-    const result = await libraryService.listCohortMaterials(id, cohortId);
-    res.status(HTTP_STATUS.OK).json(new SuccessResponse(HTTP_STATUS.OK, 'OK', result));
+    const materials = await libraryService.listCohortMaterials(id, cohortId, user.role);
+    res.status(HTTP_STATUS.OK).json(new SuccessResponse(HTTP_STATUS.OK, 'OK', { materials }));
   } catch (error) {
     next(error);
   }

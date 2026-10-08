@@ -36,6 +36,8 @@ import { generateMakeupSession } from '../../src/services/session.service.js';
 import { createPendingRefund } from '../../src/services/refund.service.js';
 import {
   checkTutorEscalation,
+  listEscalatedTutorIds,
+  listMisses,
   recordStudentCausedMiss,
   recordTutorCausedMiss,
 } from '../../src/services/sessionMiss.service.js';
@@ -278,5 +280,103 @@ describe('checkTutorEscalation', () => {
     );
 
     await expect(checkTutorEscalation(TUTOR_ID)).resolves.toBe(false);
+  });
+});
+
+function missRow(id: string, tutorId: string, causedBy = 'TUTOR') {
+  return {
+    id,
+    sessionId: `s-${id}`,
+    causedBy,
+    missType: 'NO_SHOW',
+    makeupSessionId: null,
+    createdAt: new Date(),
+    session: { cohort: { tutorId } },
+  };
+}
+
+describe('listMisses', () => {
+  beforeEach(resetMocks);
+
+  it('Tutor/Admin-with-tutorId: filters through session.cohort.tutorId, adds tutorId per row and drops the nested session', async () => {
+    (prisma.sessionMiss.findMany as any)
+      .mockResolvedValueOnce([missRow('m1', TUTOR_ID)]) // page rows
+      .mockResolvedValueOnce([missRow('m1', TUTOR_ID), missRow('m2', TUTOR_ID)]); // escalation check
+    (prisma.sessionMiss.count as any).mockResolvedValue(1);
+
+    const result = await listMisses({ tutorId: TUTOR_ID });
+
+    expect((prisma.sessionMiss.findMany as any).mock.calls[0][0].where).toEqual({
+      session: { cohort: { tutorId: TUTOR_ID } },
+    });
+    expect(result.misses[0]).toMatchObject({ id: 'm1', tutorId: TUTOR_ID });
+    expect(result.misses[0]).not.toHaveProperty('session');
+    expect(result.escalationFlag).toBe(true);
+    expect(result.escalatedTutorIds).toEqual([]);
+  });
+
+  it('Admin without tutorId: escalationFlag is null and escalatedTutorIds lists every escalated tutor', async () => {
+    (prisma.sessionMiss.findMany as any)
+      .mockResolvedValueOnce([missRow('m1', 'tutor-a'), missRow('m3', 'tutor-b')]) // page rows
+      .mockResolvedValueOnce([
+        missRow('m1', 'tutor-a'),
+        missRow('m2', 'tutor-a'),
+        missRow('m3', 'tutor-b'),
+      ]); // escalation list
+    (prisma.sessionMiss.count as any).mockResolvedValue(2);
+
+    const result = await listMisses({});
+
+    expect(result.escalationFlag).toBeNull();
+    expect(result.escalatedTutorIds).toEqual(['tutor-a']);
+    expect(result.misses.map((m: any) => m.tutorId)).toEqual(['tutor-a', 'tutor-b']);
+  });
+
+  it('applies the causedBy filter and real pagination (skip/take, total from count, newest first)', async () => {
+    (prisma.sessionMiss.findMany as any).mockResolvedValue([]);
+    (prisma.sessionMiss.count as any).mockResolvedValue(45);
+
+    const result = await listMisses({ causedBy: 'STUDENT', page: '3', limit: '10' });
+
+    const args = (prisma.sessionMiss.findMany as any).mock.calls[0][0];
+    expect(args.where).toEqual({ causedBy: 'STUDENT' });
+    expect(args.skip).toBe(20);
+    expect(args.take).toBe(10);
+    expect(args.orderBy).toEqual({ createdAt: 'desc' });
+    expect(result).toMatchObject({ page: 3, limit: 10, total: 45 });
+  });
+
+  it('falls back to page 1 / limit 20 on bad values and caps limit at 100', async () => {
+    (prisma.sessionMiss.findMany as any).mockResolvedValue([]);
+    (prisma.sessionMiss.count as any).mockResolvedValue(0);
+
+    const a = await listMisses({ page: 'abc', limit: '-4' });
+    const b = await listMisses({ limit: '5000' });
+
+    expect(a).toMatchObject({ page: 1, limit: 20 });
+    expect(b.limit).toBe(100);
+  });
+
+  it('rejects an unknown causedBy value with ApiError(400)', async () => {
+    await expect(listMisses({ causedBy: 'ADMIN' })).rejects.toMatchObject({ statusCode: 400 });
+  });
+});
+
+describe('listEscalatedTutorIds', () => {
+  beforeEach(resetMocks);
+
+  it('returns only tutors with 2+ TUTOR-caused misses in the last 30 days', async () => {
+    (prisma.sessionMiss.findMany as any).mockResolvedValue([
+      missRow('m1', 'tutor-a'),
+      missRow('m2', 'tutor-a'),
+      missRow('m3', 'tutor-b'),
+    ]);
+
+    const ids = await listEscalatedTutorIds();
+
+    expect(ids).toEqual(['tutor-a']);
+    const where = (prisma.sessionMiss.findMany as any).mock.calls[0][0].where;
+    expect(where.causedBy).toBe('TUTOR');
+    expect(where.createdAt.gte).toBeInstanceOf(Date);
   });
 });

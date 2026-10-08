@@ -2,15 +2,17 @@ import { Request, Response, NextFunction } from 'express';
 import { SuccessResponse } from '../utils/ApiResponse.js';
 import { HTTP_STATUS } from '../constants/index.js';
 import * as sessionMissService from '../services/sessionMiss.service.js';
+import { resolveCallerProfileId } from '../utils/profileIds.js';
 
 export const listMisses = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { id, role } = (req as any).user;
-    let tutorId = req.query.tutorId as string;
-
-    if (role === 'TUTOR') {
-      tutorId = id;
-    }
+    const user = (req as any).user;
+    // Cohort.tutorId is the TutorProfile id, not the JWT user id.
+    // A Tutor is always scoped to their own record (client tutorId ignored); Admin may filter.
+    const tutorId: string | undefined =
+      user.role === 'TUTOR'
+        ? await resolveCallerProfileId(user)
+        : (req.query.tutorId as string | undefined) || undefined;
 
     // Merge everything into one options object since the test expects 1 argument
     const result = await sessionMissService.listMisses({ ...req.query, tutorId });

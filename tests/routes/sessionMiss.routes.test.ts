@@ -8,6 +8,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import request from 'supertest';
 
+vi.mock('../../src/utils/profileIds.js', () => ({
+  resolveCallerProfileId: async (u: { id: string }) => u.id,
+}));
+
 vi.mock('../../src/services/sessionMiss.service.js', () => ({
   listMisses: vi.fn(),
   recordTutorCausedMiss: vi.fn(),
@@ -19,6 +23,7 @@ vi.mock('../../src/utils/jwt.js', () => ({
   verifyAccessToken: vi.fn((token: string) => {
     if (token === 'tutor-token') return { id: 'tutor-1', role: 'TUTOR' };
     if (token === 'admin-token') return { id: 'admin-1', role: 'ADMIN' };
+    if (token === 'student-token') return { id: 'student-1', role: 'STUDENT' };
     throw new Error('invalid token');
   }),
 }));
@@ -76,6 +81,15 @@ describe('sessionMiss.routes.ts', () => {
     expect(sessionMissService.listMisses).toHaveBeenCalledWith(
       expect.objectContaining({ tutorId: 'tutor-1' }),
     );
+  });
+
+  it('GET / rejects a Student — 403 (Tutor|Admin only)', async () => {
+    const res = await request(app)
+      .get('/api/v1/session-miss')
+      .set('Authorization', 'Bearer student-token');
+
+    expect(res.status).toBe(403);
+    expect(sessionMissService.listMisses).not.toHaveBeenCalled();
   });
 
   it('POST / with a valid Admin token reaches the (mocked) service', async () => {

@@ -6,7 +6,7 @@ const router = Router();
 
 router.use(authMiddleware);
 
-router.get('/', listMisses);
+router.get('/', requireRole('TUTOR', 'ADMIN'), listMisses);
 
 router.post('/', requireRole('ADMIN'), reportMiss);
 
