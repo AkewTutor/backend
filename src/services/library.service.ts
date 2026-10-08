@@ -42,20 +42,45 @@ export async function uploadMaterial(
   });
 }
 
-export async function listCohortMaterials(callerId: string, cohortId: string) {
-  const membership = await prisma.cohortMembership.findFirst({
-    where: { cohortId, studentId: callerId, status: 'ACTIVE' },
-  });
+/**
+ * callerId is the role's profile id (StudentProfile / TutorProfile / ParentProfile);
+ * for ADMIN it is the user id and is unused. Admin has read access to any cohort.
+ */
+export async function listCohortMaterials(callerId: string, cohortId: string, role?: string) {
+  if (role !== 'ADMIN') {
+    let isMember = false;
 
-  if (!membership) {
-    const cohort = await prisma.cohort.findUnique({ where: { id: cohortId } });
-    if (cohort?.tutorId !== callerId) {
-      throw new ApiError(403, "Not authorized to view this cohort's materials");
+    if (role === 'PARENT') {
+      const links = await prisma.parentStudentRelationship.findMany({
+        where: { parentId: callerId, status: 'ACTIVE' },
+        select: { studentId: true },
+      });
+      const studentIds = links.map((l: { studentId: string }) => l.studentId);
+      if (studentIds.length > 0) {
+        const membership = await prisma.cohortMembership.findFirst({
+          where: { cohortId, studentId: { in: studentIds }, status: 'ACTIVE' },
+        });
+        isMember = !!membership;
+      }
+    } else {
+      const membership = await prisma.cohortMembership.findFirst({
+        where: { cohortId, studentId: callerId, status: 'ACTIVE' },
+      });
+      isMember = !!membership;
+    }
+
+    if (!isMember) {
+      const cohort = await prisma.cohort.findUnique({ where: { id: cohortId } });
+      if (cohort?.tutorId !== callerId) {
+        throw new ApiError(403, "Not authorized to view this cohort's materials");
+      }
     }
   }
 
   return prisma.libraryMaterial.findMany({
     where: { cohortId, removedAt: null },
+    select: { id: true, title: true, fileType: true, fileUrl: true, createdAt: true },
+    orderBy: { createdAt: 'desc' },
   });
 }
 

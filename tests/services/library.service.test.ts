@@ -11,6 +11,7 @@ vi.mock('../../src/config/db.js', () => ({
   prisma: {
     cohort: { findUnique: vi.fn() },
     cohortMembership: { findFirst: vi.fn() },
+    parentStudentRelationship: { findMany: vi.fn() },
     libraryMaterial: {
       create: vi.fn(),
       findMany: vi.fn(),
@@ -110,6 +111,67 @@ describe('listCohortMaterials', () => {
     });
 
     await expect(listCohortMaterials('unrelated-student', COHORT_ID)).rejects.toMatchObject({
+      statusCode: 403,
+      message: "Not authorized to view this cohort's materials",
+    });
+  });
+});
+
+describe('listCohortMaterials — Admin and Parent access', () => {
+  beforeEach(resetMocks);
+
+  it('Admin reads any cohort without a membership or tutor check', async () => {
+    (prisma.libraryMaterial.findMany as any).mockResolvedValue([{ id: MATERIAL_ID }]);
+
+    const result = await listCohortMaterials(ADMIN_ID, COHORT_ID, 'ADMIN');
+
+    expect(result).toHaveLength(1);
+    expect(prisma.cohortMembership.findFirst).not.toHaveBeenCalled();
+    expect(prisma.cohort.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('returns only the contract fields and hides removed materials', async () => {
+    (prisma.cohortMembership.findFirst as any).mockResolvedValue({ id: 'm-1' });
+    (prisma.libraryMaterial.findMany as any).mockResolvedValue([]);
+
+    await listCohortMaterials('student-1', COHORT_ID, 'STUDENT');
+
+    expect(prisma.libraryMaterial.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { cohortId: COHORT_ID, removedAt: null },
+        select: { id: true, title: true, fileType: true, fileUrl: true, createdAt: true },
+      }),
+    );
+  });
+
+  it("Parent with an ACTIVE child in the cohort retrieves the cohort's materials", async () => {
+    (prisma.parentStudentRelationship.findMany as any).mockResolvedValue([
+      { studentId: 'student-9' },
+    ]);
+    (prisma.cohortMembership.findFirst as any).mockResolvedValue({
+      id: 'm-1',
+      cohortId: COHORT_ID,
+    });
+    (prisma.libraryMaterial.findMany as any).mockResolvedValue([{ id: MATERIAL_ID }]);
+
+    const result = await listCohortMaterials('parent-profile-1', COHORT_ID, 'PARENT');
+
+    expect(result).toHaveLength(1);
+    expect(prisma.parentStudentRelationship.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { parentId: 'parent-profile-1', status: 'ACTIVE' } }),
+    );
+    expect(prisma.cohortMembership.findFirst).toHaveBeenCalledWith({
+      where: { cohortId: COHORT_ID, studentId: { in: ['student-9'] }, status: 'ACTIVE' },
+    });
+  });
+
+  it('Parent with no child in the cohort rejected with ApiError(403)', async () => {
+    (prisma.parentStudentRelationship.findMany as any).mockResolvedValue([]);
+    (prisma.cohort.findUnique as any).mockResolvedValue({ id: COHORT_ID, tutorId: 'some-tutor' });
+
+    await expect(
+      listCohortMaterials('parent-profile-1', COHORT_ID, 'PARENT'),
+    ).rejects.toMatchObject({
       statusCode: 403,
       message: "Not authorized to view this cohort's materials",
     });

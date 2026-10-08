@@ -8,6 +8,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Request, Response } from 'express';
 
+vi.mock('../../src/utils/profileIds.js', () => ({
+  resolveCallerProfileId: async (u: { id: string }) => `profile-of-${u.id}`,
+}));
+
 vi.mock('../../src/services/sessionMiss.service.js', () => ({
   listMisses: vi.fn(),
   recordTutorCausedMiss: vi.fn(),
@@ -40,7 +44,7 @@ describe('sessionMiss.controller.ts', () => {
     });
   });
 
-  it('GET / allows a Tutor to see only their own record — scoped to req.user.id, ignoring any client-supplied tutorId', async () => {
+  it('GET / allows a Tutor to see only their own record — scoped to their TutorProfile id, ignoring any client-supplied tutorId', async () => {
     const req = mockReq({
       query: { tutorId: 'some-other-tutor' },
       user: { id: 'tutor-1', role: 'TUTOR' },
@@ -50,7 +54,7 @@ describe('sessionMiss.controller.ts', () => {
     await listMisses(req, res, vi.fn());
 
     expect(sessionMissService.listMisses).toHaveBeenCalledWith(
-      expect.objectContaining({ tutorId: 'tutor-1' }),
+      expect.objectContaining({ tutorId: 'profile-of-tutor-1' }),
     );
   });
 
@@ -65,6 +69,17 @@ describe('sessionMiss.controller.ts', () => {
 
     expect(sessionMissService.listMisses).toHaveBeenCalledWith(
       expect.objectContaining({ tutorId: 'some-other-tutor' }),
+    );
+  });
+
+  it('GET / lets Admin list all tutors when no tutorId is supplied (service receives tutorId undefined)', async () => {
+    const req = mockReq({ query: {}, user: { id: 'admin-1', role: 'ADMIN' } } as any);
+    const res = mockRes();
+
+    await listMisses(req, res, vi.fn());
+
+    expect(sessionMissService.listMisses).toHaveBeenCalledWith(
+      expect.objectContaining({ tutorId: undefined }),
     );
   });
 

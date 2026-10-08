@@ -10,6 +10,7 @@ import request from 'supertest';
 
 vi.mock('../../src/utils/profileIds.js', () => ({
   resolveCallerProfileId: async (u: { id: string }) => u.id,
+  resolveGamificationCallerId: async (u: { id: string }) => u.id,
 }));
 
 vi.mock('../../src/services/library.service.js', () => ({
@@ -88,7 +89,21 @@ describe('library.routes.ts', () => {
       .set('Authorization', 'Bearer student-token');
 
     expect(res.status).toBe(200);
-    expect(libraryService.listCohortMaterials).toHaveBeenCalledWith('student-1', 'cohort-1');
+    expect(libraryService.listCohortMaterials).toHaveBeenCalledWith(
+      'student-1',
+      'cohort-1',
+      'STUDENT',
+    );
+    expect(res.body.data).toEqual({ materials: [] });
+  });
+
+  it('GET /library/cohorts/:cohortId/materials is readable by Admin (no membership required)', async () => {
+    const res = await request(app)
+      .get('/api/v1/library/cohorts/cohort-1/materials')
+      .set('Authorization', 'Bearer admin-token');
+
+    expect(res.status).toBe(200);
+    expect(libraryService.listCohortMaterials).toHaveBeenCalledWith('admin-1', 'cohort-1', 'ADMIN');
   });
 
   it('PATCH /admin/library/materials/:id with a valid Admin token reaches the (mocked) service', async () => {
