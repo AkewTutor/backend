@@ -17,24 +17,100 @@ export async function listDisputeQueue(
 
   const skip = (page - 1) * limit;
 
-  const complaints = await prisma.complaintReport.findMany({
-    where,
-    skip,
-    take: limit,
-    orderBy: { createdAt: 'desc' },
+  const [rows, total] = await Promise.all([
+    prisma.complaintReport.findMany({
+      where,
+      skip,
+      take: limit,
+      orderBy: { createdAt: 'desc' },
+      include: { reporter: { select: { role: true } } },
+    }),
+    prisma.complaintReport.count({ where }),
+  ]);
+
+  // 06-api/08 GET /admin/disputes: a slim queue row, never the full description.
+  const complaints = rows.map((c) => ({
+    id: c.id,
+    reporterRole: c.reporter?.role,
+    category: c.category,
+    status: c.status,
+    relatedSessionId: c.relatedSessionId,
+    createdAt: c.createdAt,
+  }));
+
+  return { complaints, page, limit, total };
+}
+
+// The student's current paid billing cycle. Shared by the detail preview and the resolve
+// path so both always look at the same payment (latest billing period first).
+async function findCurrentPaidPayment(cohortMembershipId: string) {
+  return prisma.payment.findFirst({
+    where: { cohortMembershipId, status: 'SUCCESS' },
+    orderBy: { billingPeriodStart: 'desc' },
+  });
+}
+
+// Candidate memberships for the REFUND_ISSUED picker (H4 fix). The preview amount comes
+// from the same calculateProration the resolve path uses. It is read-only: nothing is
+// created or approved here.
+async function listCandidateMemberships(cohortId: string) {
+  const memberships = await prisma.cohortMembership.findMany({
+    where: { cohortId, status: 'ACTIVE' },
+    include: { student: { select: { user: { select: { name: true } } } } },
   });
 
-  return { complaints, page, limit };
+  return Promise.all(
+    memberships.map(async (m) => {
+      const payment = await findCurrentPaidPayment(m.id);
+
+      let refundPreviewAmount: string | null = null;
+      if (payment) {
+        const proration = await refundService.calculateProration(
+          payment.id,
+          'ADMIN_DISPUTE_RESOLUTION',
+        );
+        // Mirrors resolveDispute: nothing undelivered means nothing to refund.
+        if (proration.sessionsRemaining > 0 && Number(proration.amount) > 0) {
+          refundPreviewAmount = proration.amount;
+        }
+      }
+
+      return {
+        id: m.id,
+        studentDisplayName: m.student?.user?.name ?? 'Student',
+        hasActivePaidCycle: payment !== null && payment !== undefined,
+        refundPreviewAmount,
+      };
+    }),
+  );
 }
 
 export async function getDisputeForReview(complaintId: string) {
   const complaint = await prisma.complaintReport.findUnique({
     where: { id: complaintId },
+    include: {
+      reporter: { select: { role: true } },
+      session: { select: { cohortId: true } },
+    },
   });
 
   if (!complaint) throw new ApiError(404, 'Complaint not found');
 
-  return complaint;
+  const { reporter, session, ...fields } = complaint;
+
+  // Same cohort resolution order as the complaint's own links: cohort, then session, then thread.
+  let cohortId: string | null = complaint.relatedCohortId ?? session?.cohortId ?? null;
+  if (!cohortId && complaint.relatedThreadId) {
+    const thread = await prisma.messageThread.findUnique({
+      where: { id: complaint.relatedThreadId },
+      select: { cohortId: true },
+    });
+    cohortId = thread?.cohortId ?? null;
+  }
+
+  const candidateMemberships = cohortId ? await listCandidateMemberships(cohortId) : [];
+
+  return { ...fields, reporterRole: reporter?.role, candidateMemberships };
 }
 
 export async function resolveDispute(
@@ -62,9 +138,7 @@ export async function resolveDispute(
   }
 
   if (data.resolutionAction === 'REFUND_ISSUED') {
-    const payment = await prisma.payment.findFirst({
-      where: { cohortMembershipId: data.affectedCohortMembershipId, status: 'SUCCESS' },
-    });
+    const payment = await findCurrentPaidPayment(data.affectedCohortMembershipId as string);
     if (!payment) {
       throw new ApiError(
         400,
