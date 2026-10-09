@@ -31,7 +31,10 @@ vi.mock('../../src/config/db.js', () => ({
       findMany: vi.fn(),
       findUnique: vi.fn(),
       update: vi.fn(),
+      count: vi.fn(),
     },
+    cohortMembership: { findMany: vi.fn() },
+    messageThread: { findUnique: vi.fn() },
     payment: { findFirst: vi.fn() },
     tutorProfile: { findUnique: vi.fn() },
   },
@@ -81,6 +84,9 @@ function resetMocks() {
   });
   (dispatchNotification as any).mockResolvedValue(undefined);
   (auditLogService.record as any).mockResolvedValue(undefined);
+  (prisma.complaintReport.count as any).mockResolvedValue(0);
+  (prisma.cohortMembership.findMany as any).mockResolvedValue([]);
+  (prisma.messageThread.findUnique as any).mockResolvedValue(null);
 }
 
 describe('listDisputeQueue', () => {
@@ -111,6 +117,37 @@ describe('listDisputeQueue', () => {
     const result = await listDisputeQueue(undefined, undefined, 1, 20);
 
     expect(result.complaints).toEqual([]);
+  });
+
+  it('returns the 06-api queue shape: slim rows with reporterRole, plus total', async () => {
+    (prisma.complaintReport.findMany as any).mockResolvedValue([
+      {
+        ...buildComplaintReport({
+          reporterId: 'reporter-1',
+          category: 'SESSION_ISSUE',
+          description: 'x'.repeat(20),
+          relatedSessionId: 'session-1',
+        }),
+        reporter: { role: 'PARENT' },
+      },
+    ]);
+    (prisma.complaintReport.count as any).mockResolvedValue(41);
+
+    const result = await listDisputeQueue('OPEN', undefined, 2, 20);
+
+    expect(result.total).toBe(41);
+    expect(result.page).toBe(2);
+    expect(result.complaints[0].reporterRole).toBe('PARENT');
+    expect(Object.keys(result.complaints[0]).sort()).toEqual([
+      'category',
+      'createdAt',
+      'id',
+      'relatedSessionId',
+      'reporterRole',
+      'status',
+    ]);
+    const countArg = (prisma.complaintReport.count as any).mock.calls[0][0];
+    expect(JSON.stringify(countArg.where)).toContain('OPEN');
   });
 });
 
@@ -157,6 +194,178 @@ describe('getDisputeForReview', () => {
     await expect(getDisputeForReview('unknown-id')).rejects.toMatchObject({
       statusCode: 404,
     });
+  });
+});
+
+describe('getDisputeForReview — candidateMemberships (H4 refund picker)', () => {
+  beforeEach(resetMocks);
+
+  const base = () =>
+    buildComplaintReport({
+      reporterId: 'reporter-1',
+      category: 'SESSION_ISSUE',
+      description: 'x'.repeat(20),
+    });
+
+  it('lists active memberships of the complaint cohort with a server-computed preview', async () => {
+    (prisma.complaintReport.findUnique as any).mockResolvedValue({
+      ...base(),
+      relatedCohortId: 'cohort-1',
+      reporter: { role: 'PARENT' },
+      session: null,
+    });
+    (prisma.cohortMembership.findMany as any).mockResolvedValue([
+      { id: 'm1', student: { user: { name: 'Abel' } } },
+    ]);
+    (prisma.payment.findFirst as any).mockResolvedValue({ id: 'pay-1' });
+
+    const result = await getDisputeForReview(COMPLAINT_ID);
+
+    expect(result.reporterRole).toBe('PARENT');
+    expect(result.candidateMemberships).toEqual([
+      {
+        id: 'm1',
+        studentDisplayName: 'Abel',
+        hasActivePaidCycle: true,
+        refundPreviewAmount: '50.00',
+      },
+    ]);
+    expect(prisma.cohortMembership.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { cohortId: 'cohort-1', status: 'ACTIVE' } }),
+    );
+    expect(prisma.payment.findFirst).toHaveBeenCalledWith({
+      where: { cohortMembershipId: 'm1', status: 'SUCCESS' },
+      orderBy: { billingPeriodStart: 'desc' },
+    });
+    expect(refundService.calculateProration).toHaveBeenCalledWith(
+      'pay-1',
+      'ADMIN_DISPUTE_RESOLUTION',
+    );
+  });
+
+  it('the preview is read-only: no refund is created or approved', async () => {
+    (prisma.complaintReport.findUnique as any).mockResolvedValue({
+      ...base(),
+      relatedCohortId: 'cohort-1',
+      reporter: { role: 'PARENT' },
+      session: null,
+    });
+    (prisma.cohortMembership.findMany as any).mockResolvedValue([
+      { id: 'm1', student: { user: { name: 'Abel' } } },
+    ]);
+    (prisma.payment.findFirst as any).mockResolvedValue({ id: 'pay-1' });
+
+    await getDisputeForReview(COMPLAINT_ID);
+
+    expect(refundService.createPendingRefund).not.toHaveBeenCalled();
+    expect(refundService.approveRefund).not.toHaveBeenCalled();
+    expect(prisma.complaintReport.update).not.toHaveBeenCalled();
+  });
+
+  it('a membership with no paid cycle is flagged and gets no preview', async () => {
+    (prisma.complaintReport.findUnique as any).mockResolvedValue({
+      ...base(),
+      relatedCohortId: 'cohort-1',
+      reporter: { role: 'PARENT' },
+      session: null,
+    });
+    (prisma.cohortMembership.findMany as any).mockResolvedValue([
+      { id: 'm1', student: { user: { name: null } } },
+    ]);
+    (prisma.payment.findFirst as any).mockResolvedValue(null);
+
+    const result = await getDisputeForReview(COMPLAINT_ID);
+
+    expect(result.candidateMemberships).toEqual([
+      {
+        id: 'm1',
+        studentDisplayName: 'Student',
+        hasActivePaidCycle: false,
+        refundPreviewAmount: null,
+      },
+    ]);
+    expect(refundService.calculateProration).not.toHaveBeenCalled();
+  });
+
+  it('nothing undelivered in the cycle means no preview (matches the resolve-time 400)', async () => {
+    (prisma.complaintReport.findUnique as any).mockResolvedValue({
+      ...base(),
+      relatedCohortId: 'cohort-1',
+      reporter: { role: 'PARENT' },
+      session: null,
+    });
+    (prisma.cohortMembership.findMany as any).mockResolvedValue([
+      { id: 'm1', student: { user: { name: 'Abel' } } },
+    ]);
+    (prisma.payment.findFirst as any).mockResolvedValue({ id: 'pay-1' });
+    (refundService.calculateProration as any).mockResolvedValue({
+      amount: '0.00',
+      sessionsRemaining: 0,
+      totalSessionsBilled: 8,
+    });
+
+    const result = await getDisputeForReview(COMPLAINT_ID);
+
+    expect(result.candidateMemberships[0].hasActivePaidCycle).toBe(true);
+    expect(result.candidateMemberships[0].refundPreviewAmount).toBeNull();
+  });
+
+  it("falls back to the related session's cohort when no cohort is linked", async () => {
+    (prisma.complaintReport.findUnique as any).mockResolvedValue({
+      ...base(),
+      relatedSessionId: 'session-1',
+      reporter: { role: 'STUDENT' },
+      session: { cohortId: 'cohort-9' },
+    });
+
+    await getDisputeForReview(COMPLAINT_ID);
+
+    expect(prisma.cohortMembership.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { cohortId: 'cohort-9', status: 'ACTIVE' } }),
+    );
+  });
+
+  it("falls back to the related thread's cohort when no cohort or session is linked", async () => {
+    (prisma.complaintReport.findUnique as any).mockResolvedValue({
+      ...base(),
+      relatedThreadId: 'thread-1',
+      reporter: { role: 'TUTOR' },
+      session: null,
+    });
+    (prisma.messageThread.findUnique as any).mockResolvedValue({ cohortId: 'cohort-7' });
+
+    await getDisputeForReview(COMPLAINT_ID);
+
+    expect(prisma.cohortMembership.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { cohortId: 'cohort-7', status: 'ACTIVE' } }),
+    );
+  });
+
+  it('a complaint with no cohort, session or thread link has no candidates', async () => {
+    (prisma.complaintReport.findUnique as any).mockResolvedValue({
+      ...base(),
+      reporter: { role: 'PARENT' },
+      session: null,
+    });
+
+    const result = await getDisputeForReview(COMPLAINT_ID);
+
+    expect(result.candidateMemberships).toEqual([]);
+    expect(prisma.cohortMembership.findMany).not.toHaveBeenCalled();
+  });
+
+  it('does not leak the joined reporter/session objects into the response', async () => {
+    (prisma.complaintReport.findUnique as any).mockResolvedValue({
+      ...base(),
+      relatedCohortId: 'cohort-1',
+      reporter: { role: 'PARENT' },
+      session: { cohortId: 'cohort-1' },
+    });
+
+    const result = await getDisputeForReview(COMPLAINT_ID);
+
+    expect(result).not.toHaveProperty('reporter');
+    expect(result).not.toHaveProperty('session');
   });
 });
 
