@@ -23,6 +23,12 @@ vi.mock('../../src/utils/jwt.js', () => ({
   }),
 }));
 
+// The controller resolves the tutor profile id through Prisma; without this mock the test
+// needs a live database (passes locally where one runs, 500s in CI where none does).
+vi.mock('../../src/utils/profileIds.js', () => ({
+  resolveCallerProfileId: async (u: { id: string }) => u.id,
+}));
+
 import * as earningService from '../../src/services/earning.service.js';
 import app from '../../src/app.js';
 

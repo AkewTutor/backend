@@ -4,6 +4,7 @@ import { initiateCheckout, verifyWebhookSignature } from '../utils/providers/cha
 import { applyToPayment } from './promotion.service.js';
 import { generateSessionsForCohort } from './session.service.js';
 import logger from '../utils/logger.js';
+import { env } from '../config/env.js';
 import { Prisma } from '@prisma/client';
 
 export async function initiatePayment(
@@ -59,7 +60,7 @@ export async function initiatePayment(
   const { checkoutUrl } = await initiateCheckout(
     amount,
     payment.id,
-    `https://api.akewtutor.example/v1/payments/callback/${payment.id}`,
+    `${env.PUBLIC_API_URL}/payments/webhook/chapa`,
   );
 
   return {

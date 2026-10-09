@@ -31,7 +31,7 @@ import { prisma } from '../../src/config/db.js';
 import * as refundService from '../../src/services/refund.service.js';
 import { adminApprove, adminReject, adminReview } from '../../src/controllers/refund.controller.js';
 
-function mockReq(overrides: Partial<Request> = {}): Request {
+function mockReq(overrides: Record<string, unknown> = {}): Request {
   return { body: {}, params: {}, query: {}, ...overrides } as unknown as Request;
 }
 

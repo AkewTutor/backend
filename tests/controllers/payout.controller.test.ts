@@ -29,7 +29,7 @@ vi.mock('../../src/services/payout.service.js', () => ({
 import * as payoutService from '../../src/services/payout.service.js';
 import { adminList, adminMarkPaid } from '../../src/controllers/payout.controller.js';
 
-function mockReq(overrides: Partial<Request> = {}): Request {
+function mockReq(overrides: Record<string, unknown> = {}): Request {
   return { body: {}, params: {}, query: {}, ...overrides } as unknown as Request;
 }
 

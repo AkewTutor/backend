@@ -63,13 +63,14 @@ import {
 import { buildUser } from '../factories/shared-config.factory.js';
 import { buildCohort, buildCohortMembership } from '../factories/matching-cohorts.factory.js';
 import { buildPricingConfig } from '../factories/payments-earnings.factory.js';
+import type { TutoringFormat } from '../factories/types.js';
 
 /**
  * Seeds a real Student, Tutor, Subject, Cohort, and a
  * CohortMembership(status: PENDING_PAYMENT) plus one active PricingConfig
  * for the cohort's format — the full real FK chain `initiatePayment` reads.
  */
-async function seedRealPendingMembership(overrides: { format?: string } = {}) {
+async function seedRealPendingMembership(overrides: { format?: TutoringFormat } = {}) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- see header comment (bare schema).
   const db = testPrisma as any;
   const studentUser = await db.user.create({

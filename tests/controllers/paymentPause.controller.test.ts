@@ -24,13 +24,16 @@ vi.mock('../../src/config/db.js', () => ({
     scheduledSession: {
       findMany: vi.fn(),
     },
+    cohortMembership: { findUnique: vi.fn() },
+    parentProfile: { findUnique: vi.fn() },
+    parentStudentRelationship: { findFirst: vi.fn() },
   },
 }));
 
 import { prisma } from '../../src/config/db.js';
 import { getPauseStatus } from '../../src/controllers/paymentPause.controller.js';
 
-function mockReq(overrides: Partial<Request> = {}): Request {
+function mockReq(overrides: Record<string, unknown> = {}): Request {
   return { body: {}, params: {}, query: {}, ...overrides } as unknown as Request;
 }
 
@@ -44,6 +47,11 @@ function mockRes() {
 describe('paymentPause.controller.ts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    (prisma.cohortMembership.findUnique as any).mockResolvedValue({
+      id: 'membership-1',
+      studentId: 'sp-1',
+      student: { userId: 'student-1' },
+    });
   });
 
   it("requires the caller's cohortMembershipId and resolves { isPaused: false } when no active pause exists", async () => {
@@ -104,5 +112,76 @@ describe('paymentPause.controller.ts', () => {
         }),
       }),
     );
+  });
+
+  it('403s a student who does not own the membership, and reads no pause data', async () => {
+    const req = mockReq({
+      user: { id: 'other-student', role: 'STUDENT' } as any,
+      query: { cohortMembershipId: 'membership-1' },
+    });
+    const next = vi.fn();
+
+    await getPauseStatus(req, mockRes(), next);
+
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 403 }));
+    expect(prisma.paymentPause.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('404s an unknown membership', async () => {
+    (prisma.cohortMembership.findUnique as any).mockResolvedValue(null);
+    const req = mockReq({
+      user: { id: 'student-1', role: 'STUDENT' } as any,
+      query: { cohortMembershipId: 'nope' },
+    });
+    const next = vi.fn();
+
+    await getPauseStatus(req, mockRes(), next);
+
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 404 }));
+  });
+
+  it('allows a parent with an ACTIVE relationship to the student', async () => {
+    (prisma.parentProfile.findUnique as any).mockResolvedValue({ id: 'pp-1' });
+    (prisma.parentStudentRelationship.findFirst as any).mockResolvedValue({ id: 'rel-1' });
+    (prisma.paymentPause.findFirst as any).mockResolvedValue(null);
+    const req = mockReq({
+      user: { id: 'parent-user', role: 'PARENT' } as any,
+      query: { cohortMembershipId: 'membership-1' },
+    });
+    const res = mockRes();
+
+    await getPauseStatus(req, res, vi.fn());
+
+    expect(prisma.parentStudentRelationship.findFirst).toHaveBeenCalledWith({
+      where: { parentId: 'pp-1', studentId: 'sp-1', status: 'ACTIVE' },
+    });
+    expect(res.status).toHaveBeenCalledWith(200);
+  });
+
+  it('403s a parent without an ACTIVE relationship', async () => {
+    (prisma.parentProfile.findUnique as any).mockResolvedValue({ id: 'pp-1' });
+    (prisma.parentStudentRelationship.findFirst as any).mockResolvedValue(null);
+    const req = mockReq({
+      user: { id: 'parent-user', role: 'PARENT' } as any,
+      query: { cohortMembershipId: 'membership-1' },
+    });
+    const next = vi.fn();
+
+    await getPauseStatus(req, mockRes(), next);
+
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 403 }));
+    expect(prisma.paymentPause.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('403s other roles (e.g. TUTOR)', async () => {
+    const req = mockReq({
+      user: { id: 't-1', role: 'TUTOR' } as any,
+      query: { cohortMembershipId: 'membership-1' },
+    });
+    const next = vi.fn();
+
+    await getPauseStatus(req, mockRes(), next);
+
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 403 }));
   });
 });

@@ -30,7 +30,7 @@ export async function approveBooking(cohortId: string, adminId: string): Promise
 
   const result = await prisma.cohort.update({
     where: { id: cohortId },
-    data: { status: 'PENDING_PAYMENT' },
+    data: { status: 'PENDING_PAYMENT', adminApprovedById: adminId },
   });
   return result;
 }

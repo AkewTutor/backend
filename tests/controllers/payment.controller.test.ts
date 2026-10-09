@@ -16,7 +16,7 @@ vi.mock('../../src/services/payment.service.js', () => ({
 import * as paymentService from '../../src/services/payment.service.js';
 import { getHistory, initiate, webhook } from '../../src/controllers/payment.controller.js';
 
-function mockReq(overrides: Partial<Request> = {}): Request {
+function mockReq(overrides: Record<string, unknown> = {}): Request {
   return { body: {}, params: {}, query: {}, headers: {}, ...overrides } as unknown as Request;
 }
 
