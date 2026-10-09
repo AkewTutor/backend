@@ -27,13 +27,16 @@ function mockReq(key: string): Request {
   } as unknown as Request;
 }
 
-function mockRes(): Response {
+function mockRes(): Response & {
+  status: ReturnType<typeof vi.fn>;
+  json: ReturnType<typeof vi.fn>;
+} {
   const res: any = {};
   res.status = vi.fn().mockReturnValue(res);
   res.json = vi.fn().mockReturnValue(res);
   res.setHeader = vi.fn();
   res.getHeader = vi.fn();
-  return res as Response;
+  return res as Response & { status: ReturnType<typeof vi.fn>; json: ReturnType<typeof vi.fn> };
 }
 
 describe('rateLimiter.middleware.ts', async () => {

@@ -132,6 +132,13 @@ describe('initiatePayment', () => {
     expect(prisma.payment.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ status: 'PENDING' }) }),
     );
+    // The callback must target a route that exists (the webhook), built from PUBLIC_API_URL.
+    expect(initiateCheckout).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(String),
+      expect.stringMatching(/\/payments\/webhook\/chapa$/),
+    );
+    expect((initiateCheckout as any).mock.calls[0][2]).not.toContain('akewtutor.example');
   });
 
   it('locks the amount in at initiation time — a later Admin price change never retroactively affects the stored Payment', async () => {

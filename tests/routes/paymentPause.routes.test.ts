@@ -19,6 +19,7 @@ vi.mock('../../src/config/db.js', () => ({
     scheduledSession: {
       findMany: vi.fn(),
     },
+    cohortMembership: { findUnique: vi.fn() },
   },
 }));
 
@@ -38,6 +39,11 @@ describe('paymentPause.routes.ts', () => {
     vi.clearAllMocks();
     (prisma.paymentPause.findFirst as any).mockResolvedValue(null);
     (prisma.scheduledSession.findMany as any).mockResolvedValue([]);
+    (prisma.cohortMembership.findUnique as any).mockResolvedValue({
+      id: 'membership-1',
+      studentId: 'sp-1',
+      student: { userId: 'student-1' },
+    });
   });
 
   it('GET /payment-pause/status requires auth — 401 with no Authorization header', async () => {

@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../config/db.js';
 import ApiError from '../utils/ApiError.js';
+import { assertCanAccessMembership } from '../services/membershipAccess.service.js';
 
 export const getPauseStatus = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -8,6 +9,9 @@ export const getPauseStatus = async (req: Request, res: Response, next: NextFunc
     if (!cohortMembershipId) {
       throw new ApiError(400, 'cohortMembershipId is required');
     }
+
+    const caller = (req as any).user as { id: string; role: string };
+    await assertCanAccessMembership(caller.id, caller.role, cohortMembershipId);
 
     const pause = await prisma.paymentPause.findFirst({
       where: { cohortMembershipId, endedAt: null },
