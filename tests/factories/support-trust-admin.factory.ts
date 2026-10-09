@@ -22,6 +22,7 @@ export function buildComplaintReport(
     reporterId: string;
     category: ComplaintReport['category'];
     description: string;
+    cohort?: { id: string; tutorId: string };
   },
 ): ComplaintReport {
   const base: ComplaintReport = {

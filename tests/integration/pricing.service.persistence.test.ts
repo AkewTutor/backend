@@ -29,6 +29,7 @@ import {
   testPrisma,
 } from '../setup/testDb.js';
 import { buildPricingConfig } from '../factories/payments-earnings.factory.js';
+import type { TutoringFormat } from '../factories/types.js';
 import { buildUser } from '../factories/shared-config.factory.js';
 
 /** Seeds a real Admin User — PricingConfig.createdById is a real FK → User.id. */
@@ -47,7 +48,7 @@ const validSplit = {
 };
 
 /** Seeds a real active PricingConfig for the given format. */
-async function seedRealActiveConfig(format: string, adminId: string) {
+async function seedRealActiveConfig(format: TutoringFormat, adminId: string) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- see header comment (bare schema).
   return (testPrisma as any).pricingConfig.create({
     data: buildPricingConfig({ createdById: adminId, format, isActive: true }),

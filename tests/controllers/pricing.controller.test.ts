@@ -15,7 +15,7 @@ vi.mock('../../src/services/pricing.service.js', () => ({
 import * as pricingService from '../../src/services/pricing.service.js';
 import { adminUpdate, getActive } from '../../src/controllers/pricing.controller.js';
 
-function mockReq(overrides: Partial<Request> = {}): Request {
+function mockReq(overrides: Record<string, unknown> = {}): Request {
   return { body: {}, params: {}, query: {}, ...overrides } as unknown as Request;
 }
 

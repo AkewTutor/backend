@@ -49,7 +49,11 @@ const envSchema = z
     ADMIN_SEED_PASSWORD: z.string(),
     CHAPA_SECRET_KEY: z.string().default('dummy-chapa-secret'),
     CHAPA_WEBHOOK_SECRET: z.string().default('dummy-chapa-webhook-secret'),
-    CHAPA_BASE_URL: z.string().default('https://api.chapa.co/v1'),
+    // Host only: chapa.client appends /v1/transaction/initialize itself.
+    CHAPA_BASE_URL: z.string().default('https://api.chapa.co'),
+    // Public base URL of THIS API (incl. /api/v1). Chapa calls back to it; must be
+    // reachable from the internet in production.
+    PUBLIC_API_URL: z.string().default('http://localhost:3000/api/v1'),
   })
   .superRefine((v, ctx) => {
     if (v.NODE_ENV !== 'production') return;
@@ -60,6 +64,8 @@ const envSchema = z
       bad('CHAPA_SECRET_KEY', 'must be set in production');
     if (v.CHAPA_WEBHOOK_SECRET.startsWith('dummy-'))
       bad('CHAPA_WEBHOOK_SECRET', 'must be set in production');
+    if (/localhost|127\.0\.0\.1/.test(v.PUBLIC_API_URL))
+      bad('PUBLIC_API_URL', 'must be a public URL in production');
   });
 
 const parsed = envSchema.safeParse(process.env);

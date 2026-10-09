@@ -163,6 +163,10 @@ describe('approveBooking / rejectBooking', () => {
     const result = await approveBooking(cohortId, adminId);
 
     expect(result.status).toBe('PENDING_PAYMENT');
+    expect(prisma.cohort.update).toHaveBeenCalledWith({
+      where: { id: cohortId },
+      data: { status: 'PENDING_PAYMENT', adminApprovedById: adminId },
+    });
   });
 
   it('approve does not itself confirm the schedule — no session-generation call from here', async () => {
