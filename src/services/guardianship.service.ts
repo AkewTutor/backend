@@ -80,38 +80,70 @@ export async function inviteOptionalGuardian(userId: string, inviteContact: stri
   const guardianProfileId = crypto.randomUUID();
   const guardianUserId = crypto.randomUUID();
 
-  // The guardian has no account yet: create a placeholder parent user/profile
-  // (same pattern as addStudentAndInvite) so the relationship FK is satisfied.
-  const [, result] = await prisma.$transaction([
-    prisma.parentProfile.create({
-      data: {
-        id: guardianProfileId,
-        user: {
-          create: {
-            id: guardianUserId,
-            role: 'PARENT',
-            email: isEmail ? inviteContact : null,
-            phone: !isEmail ? inviteContact : null,
-            passwordHash: 'placeholder',
-            termsAcceptedAt: new Date(),
-          },
-        },
-      } as any,
-    }),
-    prisma.parentStudentRelationship.create({
-      data: {
+  // The invited contact may already be a registered parent: link to that account
+  // instead of creating a placeholder (which would violate the unique email/phone).
+  const existing = await prisma.user.findFirst({
+    where: isEmail ? { email: inviteContact } : { phone: inviteContact },
+    include: { parentProfile: true },
+  });
+  if (existing && (existing.role !== 'PARENT' || !existing.parentProfile)) {
+    throw new ApiError(
+      409,
+      'This contact belongs to an account that cannot be invited as a guardian',
+    );
+  }
+  if (existing?.parentProfile) {
+    const dup = await prisma.parentStudentRelationship.findFirst({
+      where: {
         studentId: profile.id,
-        parentId: guardianProfileId,
-        relationshipType: 'OPTIONAL_GUARDIAN',
-        status: 'INVITED',
-        inviteToken,
-        inviteExpiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
-      } as any,
-    }),
-  ]);
+        parentId: existing.parentProfile.id,
+        status: { in: ['INVITED', 'ACTIVE'] },
+      },
+    });
+    if (dup) throw new ApiError(409, 'This guardian is already linked or invited');
+  }
 
+  const relData = {
+    studentId: profile.id,
+    relationshipType: 'OPTIONAL_GUARDIAN',
+    status: 'INVITED',
+    inviteToken,
+    inviteExpiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+  } as any;
+
+  let result;
+  if (existing?.parentProfile) {
+    result = await prisma.parentStudentRelationship.create({
+      data: { ...relData, parentId: existing.parentProfile.id },
+    });
+  } else {
+    // No account yet: create a placeholder parent user/profile (same pattern as
+    // addStudentAndInvite) so the relationship FK is satisfied.
+    [, result] = await prisma.$transaction([
+      prisma.parentProfile.create({
+        data: {
+          id: guardianProfileId,
+          user: {
+            create: {
+              id: guardianUserId,
+              role: 'PARENT',
+              email: isEmail ? inviteContact : null,
+              phone: !isEmail ? inviteContact : null,
+              passwordHash: 'placeholder',
+              termsAcceptedAt: new Date(),
+            },
+          },
+        } as any,
+      }),
+      prisma.parentStudentRelationship.create({
+        data: { ...relData, parentId: guardianProfileId },
+      }),
+    ]);
+  }
+
+  // Notify the invited guardian (not the inviting student).
   const channel = isEmail ? 'EMAIL' : 'SMS';
-  await dispatchNotification(profile.userId, 'GUARDIAN_INVITE', {
+  await dispatchNotification(existing?.id ?? guardianUserId, 'GUARDIAN_INVITE', {
     channel,
     inviteContact,
     inviteToken,
@@ -236,7 +268,7 @@ export async function resendOrRegenerateInvite(callerId: string, relationshipId:
 export async function activateInvite(token: string, password?: string) {
   const rel = await prisma.parentStudentRelationship.findFirst({
     where: { status: 'INVITED', inviteToken: token },
-    include: { student: true, parent: true },
+    include: { student: true, parent: { include: { user: true } } },
   });
 
   if (!rel) {
@@ -266,13 +298,19 @@ export async function activateInvite(token: string, password?: string) {
     }
 
     const isGuardianInvite = rel.relationshipType === 'OPTIONAL_GUARDIAN';
-    await tx.user.update({
-      where: { id: isGuardianInvite ? rel.parent.userId : rel.student.userId },
-      data: {
-        passwordHash: hashedPassword || '',
-        termsAcceptedAt: new Date(),
-      },
-    });
+    // An already-registered guardian keeps their own password; only placeholder
+    // accounts (created by the invite) get credentials set here.
+    const keepExistingCredentials =
+      isGuardianInvite && rel.parent.user.passwordHash !== 'placeholder';
+    if (!keepExistingCredentials) {
+      await tx.user.update({
+        where: { id: isGuardianInvite ? rel.parent.userId : rel.student.userId },
+        data: {
+          passwordHash: hashedPassword || '',
+          termsAcceptedAt: new Date(),
+        },
+      });
+    }
 
     if (!isGuardianInvite) {
       await tx.studentProfile.update({
