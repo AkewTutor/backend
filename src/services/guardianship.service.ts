@@ -80,38 +80,70 @@ export async function inviteOptionalGuardian(userId: string, inviteContact: stri
   const guardianProfileId = crypto.randomUUID();
   const guardianUserId = crypto.randomUUID();
 
-  // The guardian has no account yet: create a placeholder parent user/profile
-  // (same pattern as addStudentAndInvite) so the relationship FK is satisfied.
-  const [, result] = await prisma.$transaction([
-    prisma.parentProfile.create({
-      data: {
-        id: guardianProfileId,
-        user: {
-          create: {
-            id: guardianUserId,
-            role: 'PARENT',
-            email: isEmail ? inviteContact : null,
-            phone: !isEmail ? inviteContact : null,
-            passwordHash: 'placeholder',
-            termsAcceptedAt: new Date(),
-          },
-        },
-      } as any,
-    }),
-    prisma.parentStudentRelationship.create({
-      data: {
+  // The invited contact may already be a registered parent: link to that account
+  // instead of creating a placeholder (which would violate the unique email/phone).
+  const existing = await prisma.user.findFirst({
+    where: isEmail ? { email: inviteContact } : { phone: inviteContact },
+    include: { parentProfile: true },
+  });
+  if (existing && (existing.role !== 'PARENT' || !existing.parentProfile)) {
+    throw new ApiError(
+      409,
+      'This contact belongs to an account that cannot be invited as a guardian',
+    );
+  }
+  if (existing?.parentProfile) {
+    const dup = await prisma.parentStudentRelationship.findFirst({
+      where: {
         studentId: profile.id,
-        parentId: guardianProfileId,
-        relationshipType: 'OPTIONAL_GUARDIAN',
-        status: 'INVITED',
-        inviteToken,
-        inviteExpiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
-      } as any,
-    }),
-  ]);
+        parentId: existing.parentProfile.id,
+        status: { in: ['INVITED', 'ACTIVE'] },
+      },
+    });
+    if (dup) throw new ApiError(409, 'This guardian is already linked or invited');
+  }
 
+  const relData = {
+    studentId: profile.id,
+    relationshipType: 'OPTIONAL_GUARDIAN',
+    status: 'INVITED',
+    inviteToken,
+    inviteExpiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+  } as any;
+
+  let result;
+  if (existing?.parentProfile) {
+    result = await prisma.parentStudentRelationship.create({
+      data: { ...relData, parentId: existing.parentProfile.id },
+    });
+  } else {
+    // No account yet: create a placeholder parent user/profile (same pattern as
+    // addStudentAndInvite) so the relationship FK is satisfied.
+    [, result] = await prisma.$transaction([
+      prisma.parentProfile.create({
+        data: {
+          id: guardianProfileId,
+          user: {
+            create: {
+              id: guardianUserId,
+              role: 'PARENT',
+              email: isEmail ? inviteContact : null,
+              phone: !isEmail ? inviteContact : null,
+              passwordHash: 'placeholder',
+              termsAcceptedAt: new Date(),
+            },
+          },
+        } as any,
+      }),
+      prisma.parentStudentRelationship.create({
+        data: { ...relData, parentId: guardianProfileId },
+      }),
+    ]);
+  }
+
+  // Notify the invited guardian (not the inviting student).
   const channel = isEmail ? 'EMAIL' : 'SMS';
-  await dispatchNotification(profile.userId, 'GUARDIAN_INVITE', {
+  await dispatchNotification(existing?.id ?? guardianUserId, 'GUARDIAN_INVITE', {
     channel,
     inviteContact,
     inviteToken,
@@ -204,17 +236,20 @@ export async function handleSoleGuardianRemoval({
 }
 
 export async function resendOrRegenerateInvite(callerId: string, relationshipId: string) {
-  const parent = await prisma.parentProfile.findUnique({ where: { userId: callerId } });
   const rel = await prisma.parentStudentRelationship.findUnique({
     where: { id: relationshipId },
-    include: { student: { include: { user: true } } },
+    include: { student: { include: { user: true } }, parent: { include: { user: true } } },
   });
+  if (!rel) throw new ApiError(403, 'Not authorized to manage this invite');
 
-  if (!rel || !parent || rel.parentId !== parent.id) {
+  // The inviter resends: the student for optional-guardian invites, the parent otherwise.
+  const isOptional = rel.relationshipType === 'OPTIONAL_GUARDIAN';
+  const inviterUserId = isOptional ? rel.student.userId : rel.parent.userId;
+  if (inviterUserId !== callerId) {
     throw new ApiError(403, 'Not authorized to manage this invite');
   }
   if (rel.status !== 'INVITED') {
-    throw new ApiError(409, 'This student has already activated their account');
+    throw new ApiError(409, 'This invite was already activated or revoked.');
   }
 
   const updated = await prisma.parentStudentRelationship.update({
@@ -222,10 +257,11 @@ export async function resendOrRegenerateInvite(callerId: string, relationshipId:
     data: { inviteExpiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000) },
   });
 
-  const contact = rel.student?.user?.email || rel.student?.user?.phone || 'dummy';
-  const userId = rel.student?.userId || 'dummy-user-id';
-  await dispatchNotification(userId, 'GUARDIAN_INVITE_RESEND', {
-    channel: 'EMAIL',
+  // Notify the invitee: the guardian for optional invites, the student otherwise.
+  const invitee = isOptional ? rel.parent.user : rel.student.user;
+  const contact = invitee.email || invitee.phone || '';
+  await dispatchNotification(invitee.id, 'GUARDIAN_INVITE_RESEND', {
+    channel: contact.includes('@') ? 'EMAIL' : 'SMS',
     inviteContact: contact,
     inviteToken: rel.inviteToken,
   });
@@ -233,10 +269,36 @@ export async function resendOrRegenerateInvite(callerId: string, relationshipId:
   return updated;
 }
 
+/**
+ * POST /guardianship/invites/:id/accept: a registered guardian accepts an optional-guardian
+ * invite from inside the app (no link or password involved).
+ */
+export async function acceptGuardianInvite(callerId: string, relationshipId: string) {
+  const rel = await prisma.parentStudentRelationship.findUnique({
+    where: { id: relationshipId },
+    include: { parent: true },
+  });
+  if (!rel || rel.relationshipType !== 'OPTIONAL_GUARDIAN' || rel.parent.userId !== callerId) {
+    throw new ApiError(403, 'Not authorized to accept this invite');
+  }
+  if (rel.status !== 'INVITED') {
+    throw new ApiError(409, 'This invite was already activated or revoked.');
+  }
+  if (rel.inviteExpiresAt && new Date() > rel.inviteExpiresAt) {
+    throw new ApiError(400, 'This invite is no longer valid. Ask the student to resend it');
+  }
+  const updated = await prisma.parentStudentRelationship.update({
+    where: { id: relationshipId },
+    data: { status: 'ACTIVE', activatedAt: new Date() },
+    select: { id: true, status: true, activatedAt: true },
+  });
+  return { relationshipId: updated.id, status: updated.status, activatedAt: updated.activatedAt };
+}
+
 export async function activateInvite(token: string, password?: string) {
   const rel = await prisma.parentStudentRelationship.findFirst({
     where: { status: 'INVITED', inviteToken: token },
-    include: { student: true, parent: true },
+    include: { student: true, parent: { include: { user: true } } },
   });
 
   if (!rel) {
@@ -266,13 +328,19 @@ export async function activateInvite(token: string, password?: string) {
     }
 
     const isGuardianInvite = rel.relationshipType === 'OPTIONAL_GUARDIAN';
-    await tx.user.update({
-      where: { id: isGuardianInvite ? rel.parent.userId : rel.student.userId },
-      data: {
-        passwordHash: hashedPassword || '',
-        termsAcceptedAt: new Date(),
-      },
-    });
+    // An already-registered guardian keeps their own password; only placeholder
+    // accounts (created by the invite) get credentials set here.
+    const keepExistingCredentials =
+      isGuardianInvite && rel.parent.user.passwordHash !== 'placeholder';
+    if (!keepExistingCredentials) {
+      await tx.user.update({
+        where: { id: isGuardianInvite ? rel.parent.userId : rel.student.userId },
+        data: {
+          passwordHash: hashedPassword || '',
+          termsAcceptedAt: new Date(),
+        },
+      });
+    }
 
     if (!isGuardianInvite) {
       await tx.studentProfile.update({
