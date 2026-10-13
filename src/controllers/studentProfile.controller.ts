@@ -65,3 +65,18 @@ export async function updateAcademicProfile(req: AuthRequest, res: Response, nex
     next(error);
   }
 }
+
+export async function uploadProfilePicture(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const studentId = (req.body?.studentId ?? req.query.studentId) as string | undefined;
+    const profile = await studentProfileService.uploadProfilePicture(
+      req.user!.id,
+      req.user!.role as 'STUDENT' | 'PARENT',
+      studentId,
+      req.file,
+    );
+    res.status(200).json({ statusCode: 200, success: true, message: 'OK', data: profile });
+  } catch (error) {
+    next(error);
+  }
+}
