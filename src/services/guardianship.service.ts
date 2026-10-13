@@ -269,6 +269,32 @@ export async function resendOrRegenerateInvite(callerId: string, relationshipId:
   return updated;
 }
 
+/**
+ * POST /guardianship/invites/:id/accept: a registered guardian accepts an optional-guardian
+ * invite from inside the app (no link or password involved).
+ */
+export async function acceptGuardianInvite(callerId: string, relationshipId: string) {
+  const rel = await prisma.parentStudentRelationship.findUnique({
+    where: { id: relationshipId },
+    include: { parent: true },
+  });
+  if (!rel || rel.relationshipType !== 'OPTIONAL_GUARDIAN' || rel.parent.userId !== callerId) {
+    throw new ApiError(403, 'Not authorized to accept this invite');
+  }
+  if (rel.status !== 'INVITED') {
+    throw new ApiError(409, 'This invite was already activated or revoked.');
+  }
+  if (rel.inviteExpiresAt && new Date() > rel.inviteExpiresAt) {
+    throw new ApiError(400, 'This invite is no longer valid. Ask the student to resend it');
+  }
+  const updated = await prisma.parentStudentRelationship.update({
+    where: { id: relationshipId },
+    data: { status: 'ACTIVE', activatedAt: new Date() },
+    select: { id: true, status: true, activatedAt: true },
+  });
+  return { relationshipId: updated.id, status: updated.status, activatedAt: updated.activatedAt };
+}
+
 export async function activateInvite(token: string, password?: string) {
   const rel = await prisma.parentStudentRelationship.findFirst({
     where: { status: 'INVITED', inviteToken: token },
