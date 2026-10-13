@@ -1,5 +1,20 @@
 import { prisma } from '../config/db.js';
 import ApiError from '../utils/ApiError.js';
+import { randomUUID } from 'node:crypto';
+import { upload as storageUpload, getSignedUrl } from '../utils/providers/storage.client.js';
+
+const PICTURE_TYPES: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+};
+
+// Storage keys are turned into a 1-hour signed URL; old http(s) URLs pass through.
+async function withPictureUrl<T extends { profilePictureUrl: string | null }>(p: T): Promise<T> {
+  const v = p.profilePictureUrl;
+  if (!v || /^https?:\/\//.test(v)) return p;
+  return { ...p, profilePictureUrl: await getSignedUrl(v, 3600) };
+}
 
 export async function assertAccountStatusAllowsAccess(studentId: string): Promise<void> {
   const profile = await prisma.studentProfile.findUnique({
@@ -73,7 +88,7 @@ export async function getProfile(
     throw new ApiError(404, 'Student profile not found');
   }
 
-  return profile;
+  return withPictureUrl(profile);
 }
 
 export async function updateBasicProfile(
@@ -112,4 +127,25 @@ export async function updateAcademicProfile(
   });
 
   return updated;
+}
+export async function uploadProfilePicture(
+  callerId: string,
+  callerRole: 'STUDENT' | 'PARENT',
+  studentId: string | undefined,
+  file?: { buffer: Buffer; mimetype: string },
+) {
+  const targetStudentId = await verifyOwnership(callerId, callerRole, studentId);
+  const ext = file ? PICTURE_TYPES[file.mimetype] : undefined;
+  if (!file || !ext) throw new ApiError(400, 'Unsupported image format or file too large');
+
+  const { storageKey } = await storageUpload(
+    `profile-pictures/${targetStudentId}/${randomUUID()}.${ext}`,
+    file.buffer,
+    file.mimetype,
+  );
+  const updated = await prisma.studentProfile.update({
+    where: { id: targetStudentId },
+    data: { profilePictureUrl: storageKey },
+  });
+  return withPictureUrl(updated);
 }
