@@ -14,6 +14,9 @@
  * safely mock it. The cross-feature "wired in" checks for those callers
  * live in their own feature's test files (9-3, 9-4), not duplicated here —
  * this file only proves the gate itself.
+ *
+ * Profile pictures are stored in object storage as a key; `getProfile` and
+ * `uploadProfilePicture` return a signed URL (http(s) values pass through).
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -30,14 +33,20 @@ vi.mock('../../src/config/db.js', () => ({
   },
 }));
 
+vi.mock('../../src/utils/providers/storage.client.js', () => ({
+  upload: vi.fn(),
+  getSignedUrl: vi.fn(),
+}));
+
 import { prisma } from '../../src/config/db.js';
+import { upload as storageUpload, getSignedUrl } from '../../src/utils/providers/storage.client.js';
 import {
   assertAccountStatusAllowsAccess,
   getProfile,
   updateAcademicProfile,
   updateBasicProfile,
+  uploadProfilePicture,
 } from '../../src/services/studentProfile.service.js';
-import ApiError from '../../src/utils/ApiError.js';
 
 function resetAllMocks() {
   vi.clearAllMocks();
@@ -89,6 +98,43 @@ describe('studentProfile.service.ts', () => {
       message: "Not authorized to view this student's profile",
     });
   });
+
+  it('a stored storage key is returned as a signed URL', async () => {
+    (prisma.studentProfile.findUnique as any).mockResolvedValue({
+      id: 'sp-1',
+      profilePictureUrl: 'profile-pictures/sp-1/abc.png',
+    });
+    (getSignedUrl as any).mockResolvedValue('https://signed.example/pic');
+
+    const result = await getProfile('sp-1', 'STUDENT');
+
+    expect(getSignedUrl).toHaveBeenCalledWith('profile-pictures/sp-1/abc.png', 3600);
+    expect(result.profilePictureUrl).toBe('https://signed.example/pic');
+  });
+
+  it('an existing http(s) picture URL is returned unchanged and never signed', async () => {
+    (prisma.studentProfile.findUnique as any).mockResolvedValue({
+      id: 'sp-1',
+      profilePictureUrl: 'https://cdn.example.com/a.jpg',
+    });
+
+    const result = await getProfile('sp-1', 'STUDENT');
+
+    expect(getSignedUrl).not.toHaveBeenCalled();
+    expect(result.profilePictureUrl).toBe('https://cdn.example.com/a.jpg');
+  });
+
+  it('a profile with no picture is returned as-is and never signed', async () => {
+    (prisma.studentProfile.findUnique as any).mockResolvedValue({
+      id: 'sp-1',
+      profilePictureUrl: null,
+    });
+
+    const result = await getProfile('sp-1', 'STUDENT');
+
+    expect(getSignedUrl).not.toHaveBeenCalled();
+    expect(result.profilePictureUrl).toBeNull();
+  });
 });
 
 describe('updateBasicProfile', () => {
@@ -131,6 +177,100 @@ describe('updateBasicProfile', () => {
         profilePictureUrl: 'https://cdn.example.com/a.jpg',
       } as any),
     ).rejects.toMatchObject({ statusCode: 403 });
+  });
+});
+
+describe('uploadProfilePicture', () => {
+  beforeEach(() => resetAllMocks());
+
+  const png = { buffer: Buffer.from('x'), mimetype: 'image/png' };
+
+  it('stores the image, saves the storage key and returns a signed URL', async () => {
+    (prisma.studentProfile.findUnique as any).mockResolvedValue({ id: 'sp-1' });
+    (storageUpload as any).mockResolvedValue({ storageKey: 'profile-pictures/sp-1/abc.png' });
+    (prisma.studentProfile.update as any).mockResolvedValue({
+      id: 'sp-1',
+      profilePictureUrl: 'profile-pictures/sp-1/abc.png',
+    });
+    (getSignedUrl as any).mockResolvedValue('https://signed.example/pic');
+
+    const result = await uploadProfilePicture('u1', 'STUDENT', undefined, png);
+
+    expect(storageUpload).toHaveBeenCalledWith(
+      expect.stringMatching(/^profile-pictures\/sp-1\/.+\.png$/),
+      png.buffer,
+      'image/png',
+    );
+    expect(prisma.studentProfile.update).toHaveBeenCalledWith({
+      where: { id: 'sp-1' },
+      data: { profilePictureUrl: 'profile-pictures/sp-1/abc.png' },
+    });
+    expect(result.profilePictureUrl).toBe('https://signed.example/pic');
+  });
+
+  it('uses the right file extension for jpeg and webp', async () => {
+    (prisma.studentProfile.findUnique as any).mockResolvedValue({ id: 'sp-1' });
+    (storageUpload as any).mockResolvedValue({ storageKey: 'k' });
+    (prisma.studentProfile.update as any).mockResolvedValue({ id: 'sp-1', profilePictureUrl: 'k' });
+    (getSignedUrl as any).mockResolvedValue('https://signed.example/pic');
+
+    await uploadProfilePicture('u1', 'STUDENT', undefined, {
+      buffer: Buffer.from('x'),
+      mimetype: 'image/jpeg',
+    });
+    await uploadProfilePicture('u1', 'STUDENT', undefined, {
+      buffer: Buffer.from('x'),
+      mimetype: 'image/webp',
+    });
+
+    expect((storageUpload as any).mock.calls[0][0]).toMatch(/\.jpg$/);
+    expect((storageUpload as any).mock.calls[1][0]).toMatch(/\.webp$/);
+  });
+
+  it('rejects a missing or non-image file with ApiError(400) and uploads nothing', async () => {
+    (prisma.studentProfile.findUnique as any).mockResolvedValue({ id: 'sp-1' });
+
+    await expect(
+      uploadProfilePicture('u1', 'STUDENT', undefined, {
+        buffer: Buffer.from('x'),
+        mimetype: 'application/pdf',
+      }),
+    ).rejects.toMatchObject({ statusCode: 400 });
+    await expect(uploadProfilePicture('u1', 'STUDENT', undefined, undefined)).rejects.toMatchObject(
+      {
+        statusCode: 400,
+      },
+    );
+
+    expect(storageUpload).not.toHaveBeenCalled();
+    expect(prisma.studentProfile.update).not.toHaveBeenCalled();
+  });
+
+  it('a parent cannot upload for an unlinked student (IDOR) and nothing is stored', async () => {
+    (prisma.parentStudentRelationship.findFirst as any).mockResolvedValue(null);
+
+    await expect(uploadProfilePicture('parent-1', 'PARENT', 'sp-9', png)).rejects.toMatchObject({
+      statusCode: 403,
+    });
+
+    expect(storageUpload).not.toHaveBeenCalled();
+  });
+
+  it('a parent can upload for a linked ACTIVE student', async () => {
+    (prisma.parentStudentRelationship.findFirst as any).mockResolvedValue({ status: 'ACTIVE' });
+    (storageUpload as any).mockResolvedValue({ storageKey: 'profile-pictures/sp-1/abc.png' });
+    (prisma.studentProfile.update as any).mockResolvedValue({
+      id: 'sp-1',
+      profilePictureUrl: 'profile-pictures/sp-1/abc.png',
+    });
+    (getSignedUrl as any).mockResolvedValue('https://signed.example/pic');
+
+    const result = await uploadProfilePicture('parent-1', 'PARENT', 'sp-1', png);
+
+    expect(prisma.studentProfile.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'sp-1' } }),
+    );
+    expect(result.profilePictureUrl).toBe('https://signed.example/pic');
   });
 });
 
