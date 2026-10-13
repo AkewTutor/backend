@@ -236,17 +236,20 @@ export async function handleSoleGuardianRemoval({
 }
 
 export async function resendOrRegenerateInvite(callerId: string, relationshipId: string) {
-  const parent = await prisma.parentProfile.findUnique({ where: { userId: callerId } });
   const rel = await prisma.parentStudentRelationship.findUnique({
     where: { id: relationshipId },
-    include: { student: { include: { user: true } } },
+    include: { student: { include: { user: true } }, parent: { include: { user: true } } },
   });
+  if (!rel) throw new ApiError(403, 'Not authorized to manage this invite');
 
-  if (!rel || !parent || rel.parentId !== parent.id) {
+  // The inviter resends: the student for optional-guardian invites, the parent otherwise.
+  const isOptional = rel.relationshipType === 'OPTIONAL_GUARDIAN';
+  const inviterUserId = isOptional ? rel.student.userId : rel.parent.userId;
+  if (inviterUserId !== callerId) {
     throw new ApiError(403, 'Not authorized to manage this invite');
   }
   if (rel.status !== 'INVITED') {
-    throw new ApiError(409, 'This student has already activated their account');
+    throw new ApiError(409, 'This invite was already activated or revoked.');
   }
 
   const updated = await prisma.parentStudentRelationship.update({
@@ -254,10 +257,11 @@ export async function resendOrRegenerateInvite(callerId: string, relationshipId:
     data: { inviteExpiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000) },
   });
 
-  const contact = rel.student?.user?.email || rel.student?.user?.phone || 'dummy';
-  const userId = rel.student?.userId || 'dummy-user-id';
-  await dispatchNotification(userId, 'GUARDIAN_INVITE_RESEND', {
-    channel: 'EMAIL',
+  // Notify the invitee: the guardian for optional invites, the student otherwise.
+  const invitee = isOptional ? rel.parent.user : rel.student.user;
+  const contact = invitee.email || invitee.phone || '';
+  await dispatchNotification(invitee.id, 'GUARDIAN_INVITE_RESEND', {
+    channel: contact.includes('@') ? 'EMAIL' : 'SMS',
     inviteContact: contact,
     inviteToken: rel.inviteToken,
   });
