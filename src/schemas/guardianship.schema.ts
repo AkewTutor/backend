@@ -1,15 +1,16 @@
 import { z } from 'zod';
+import { normalizeContact } from '../utils/contact.js';
 
 export const addStudentSchema = z.object({
   body: z.object({
     grade: z.number().int().min(1).max(12),
-    inviteContact: z.string().min(1),
+    inviteContact: z.string().trim().min(1).transform(normalizeContact),
   }),
 });
 
 export const inviteGuardianSchema = z.object({
   body: z.object({
-    inviteContact: z.string().min(1),
+    inviteContact: z.string().trim().min(1).transform(normalizeContact),
   }),
 });
 
