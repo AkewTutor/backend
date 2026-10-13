@@ -59,8 +59,15 @@ export const adminOverride = async (req: Request, res: Response, next: NextFunct
 
 export const adminRecordingCompliance = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const result = await libraryService.adminRecordingCompliance();
-    res.status(HTTP_STATUS.OK).json(new SuccessResponse(HTTP_STATUS.OK, 'OK', result));
+    const sessions = await libraryService.adminRecordingCompliance();
+    res.status(HTTP_STATUS.OK).json(
+      new SuccessResponse(HTTP_STATUS.OK, 'OK', {
+        sessions,
+        page: 1,
+        limit: sessions.length,
+        total: sessions.length,
+      }),
+    );
   } catch (error) {
     next(error);
   }

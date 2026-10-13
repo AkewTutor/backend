@@ -14,7 +14,9 @@ export async function setSlots(req: AuthRequest, res: Response, next: NextFuncti
 export async function listSlots(req: AuthRequest, res: Response, next: NextFunction) {
   try {
     const result = await availabilityService.listSlots(req.user!.id);
-    res.status(200).json({ statusCode: 200, success: true, message: 'OK', data: result });
+    res
+      .status(200)
+      .json({ statusCode: 200, success: true, message: 'OK', data: { slots: result } });
   } catch (error) {
     next(error);
   }

@@ -31,6 +31,7 @@ router.post(
   validate(inviteGuardianSchema),
   guardianshipController.inviteOptionalGuardian,
 );
+router.get('/relationships', guardianshipController.listMyRelationships);
 router.patch(
   '/relationships/:id/revoke',
   validate(revokeRelationshipSchema),

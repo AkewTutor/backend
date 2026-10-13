@@ -20,8 +20,8 @@ export const listForMembership = async (req: Request, res: Response, next: NextF
   try {
     const callerId = await resolveCallerProfileId((req as any).user);
     const membershipId = req.params.id as string;
-    const result = await assessmentService.getAssessmentsForStudent(callerId, membershipId);
-    res.status(HTTP_STATUS.OK).json(new SuccessResponse(HTTP_STATUS.OK, 'OK', result));
+    const assessments = await assessmentService.getAssessmentsForStudent(callerId, membershipId);
+    res.status(HTTP_STATUS.OK).json(new SuccessResponse(HTTP_STATUS.OK, 'OK', { assessments }));
   } catch (error) {
     next(error);
   }

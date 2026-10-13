@@ -20,7 +20,7 @@ export async function listPendingTutors(page: number = 1, limit: number = 20) {
     }),
   ]);
 
-  return { items, page: safePage, limit: safeLimit, total };
+  return { tutors: items, page: safePage, limit: safeLimit, total };
 }
 
 export async function approveTutor(tutorId: string, adminId: string) {

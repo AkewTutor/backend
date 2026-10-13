@@ -61,3 +61,18 @@ export async function activateInvite(req: AuthRequest, res: Response, next: Next
     next(error);
   }
 }
+
+export async function listMyRelationships(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const raw = req.query.status as string | undefined;
+    const status = raw === 'INVITED' || raw === 'ACTIVE' || raw === 'REVOKED' ? raw : undefined;
+    const result = await guardianshipService.listMyRelationships(
+      req.user!.id,
+      req.user!.role,
+      status,
+    );
+    res.status(200).json({ statusCode: 200, success: true, message: 'OK', data: result });
+  } catch (error) {
+    next(error);
+  }
+}
