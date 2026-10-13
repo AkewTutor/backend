@@ -1,9 +1,14 @@
 // src/schemas/auth.schema.ts
 import { z } from 'zod';
+import { normalizeContact, normalizeEmail, normalizePhone } from '../utils/contact.js';
 
 const contactFields = {
-  email: z.string().email().optional(),
-  phone: z.string().optional(),
+  email: z.string().trim().email().transform(normalizeEmail).optional(),
+  phone: z
+    .string()
+    .trim()
+    .transform((v) => (v ? normalizePhone(v) : undefined))
+    .optional(),
   password: z.string().min(8),
   termsAccepted: z.literal(true),
 };
@@ -35,7 +40,7 @@ export const registerTutorSchema = z.object({
 
 export const loginSchema = z.object({
   body: z.object({
-    identifier: z.string().min(1),
+    identifier: z.string().trim().min(1).transform(normalizeContact),
     password: z.string().min(1),
   }),
 });
@@ -48,13 +53,13 @@ export const refreshSchema = z.object({
 
 export const passwordResetRequestSchema = z.object({
   body: z.object({
-    identifier: z.string().trim().min(1),
+    identifier: z.string().trim().min(1).transform(normalizeContact),
   }),
 });
 
 export const passwordResetSchema = z.object({
   body: z.object({
-    identifier: z.string().trim().min(1),
+    identifier: z.string().trim().min(1).transform(normalizeContact),
     code: z.string().trim().min(1),
     newPassword: z.string().min(8),
   }),

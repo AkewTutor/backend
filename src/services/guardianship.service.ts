@@ -291,3 +291,47 @@ export async function activateInvite(token: string, password?: string) {
     relationshipStatus: 'ACTIVE',
   };
 }
+
+/**
+ * GET /guardianship/relationships — the caller's own relationships (as parent or as student),
+ * optionally filtered by status. Never returns inviteToken.
+ */
+export async function listMyRelationships(
+  callerId: string,
+  callerRole: string,
+  status?: 'INVITED' | 'ACTIVE' | 'REVOKED',
+) {
+  let where: Record<string, unknown>;
+  if (callerRole === 'PARENT') {
+    const parent = await prisma.parentProfile.findUnique({
+      where: { userId: callerId },
+      select: { id: true },
+    });
+    if (!parent) return { relationships: [] };
+    where = { parentId: parent.id };
+  } else {
+    const student = await prisma.studentProfile.findUnique({
+      where: { userId: callerId },
+      select: { id: true },
+    });
+    if (!student) return { relationships: [] };
+    where = { studentId: student.id };
+  }
+  if (status) where.status = status;
+
+  const relationships = await prisma.parentStudentRelationship.findMany({
+    where,
+    orderBy: { createdAt: 'desc' },
+    select: {
+      id: true,
+      parentId: true,
+      studentId: true,
+      relationshipType: true,
+      status: true,
+      permissions: true,
+      activatedAt: true,
+      createdAt: true,
+    },
+  });
+  return { relationships };
+}

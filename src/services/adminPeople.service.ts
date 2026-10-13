@@ -38,7 +38,9 @@ export async function listUsers(
       }),
     ]);
 
-    return { items, page: safePage, limit: safeLimit, total };
+    // Rename to `users` (API doc / frontend) and never expose credential fields.
+    const users = items.map(({ passwordHash: _passwordHash, ...rest }: any) => rest);
+    return { users, page: safePage, limit: safeLimit, total };
   } catch (error) {
     // A02:2021 — Cryptographic Failures: Never write raw contact info or search terms to logs on error
     throw new Error('An error occurred while fetching users');
