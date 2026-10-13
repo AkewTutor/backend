@@ -6,7 +6,9 @@ export async function listSubjects(req: AuthRequest, res: Response, next: NextFu
   try {
     const includeInactive = req.query.includeInactive === 'true';
     const result = await subjectService.listSubjects(includeInactive);
-    res.status(200).json({ statusCode: 200, success: true, message: 'OK', data: result });
+    res
+      .status(200)
+      .json({ statusCode: 200, success: true, message: 'OK', data: { subjects: result } });
   } catch (error) {
     next(error);
   }
