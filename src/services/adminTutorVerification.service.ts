@@ -13,14 +13,42 @@ export async function listPendingTutors(page: number = 1, limit: number = 20) {
       where: { verificationStatus: 'PENDING' },
       skip,
       take: safeLimit,
-      include: { user: true },
+      orderBy: { createdAt: 'asc' },
+      include: {
+        // Only what the admin needs to identify the applicant (never passwordHash).
+        user: { select: { name: true, email: true, phone: true } },
+        subjectRankings: {
+          orderBy: { rank: 'asc' },
+          include: { subject: { select: { name: true } } },
+        },
+      },
     }),
     prisma.tutorProfile.count({
       where: { verificationStatus: 'PENDING' },
     }),
   ]);
 
-  return { tutors: items, page: safePage, limit: safeLimit, total };
+  const tutors = items.map((t: any) => ({
+    id: t.id,
+    userId: t.userId,
+    name: t.user?.name ?? null,
+    email: t.user?.email ?? null,
+    phone: t.user?.phone ?? null,
+    profilePictureUrl: t.profilePictureUrl,
+    bio: t.bio,
+    degree: t.degree,
+    experienceDescription: t.experienceDescription,
+    educationInstitution: t.educationInstitution,
+    subjects: (t.subjectRankings ?? []).map((r: any) => ({
+      subjectId: r.subjectId,
+      name: r.subject?.name ?? null,
+      rank: r.rank,
+    })),
+    verificationStatus: t.verificationStatus,
+    createdAt: t.createdAt,
+  }));
+
+  return { tutors, page: safePage, limit: safeLimit, total };
 }
 
 export async function approveTutor(tutorId: string, adminId: string) {
