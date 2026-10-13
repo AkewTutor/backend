@@ -84,9 +84,17 @@ export async function recommendTutorsWithMatchPercent(
 
   let filter: any = { verificationStatus: 'VERIFIED' };
 
+  // With no explicit subject, fall back to the student's subjects of interest (FR-SP-008).
+  const interestIds: string[] = Array.isArray(student.subjectsOfInterest)
+    ? (student.subjectsOfInterest as unknown[]).filter((x): x is string => typeof x === 'string')
+    : [];
+  const useInterests = !targetSubjectId && interestIds.length > 0;
+
   let whereClause: any = { ...filter };
   if (targetSubjectId) {
     whereClause.subjectRankings = { some: { subjectId: targetSubjectId } };
+  } else if (useInterests) {
+    whereClause.subjectRankings = { some: { subjectId: { in: interestIds } } };
   }
 
   let allTutors = await prisma.tutorProfile.findMany({
@@ -96,10 +104,19 @@ export async function recommendTutorsWithMatchPercent(
 
   const recommendations = allTutors
     .map((tutor: any) => {
-      const actualSubjectId =
-        targetSubjectId || (tutor.subjectRankings && tutor.subjectRankings[0]?.subjectId);
-      const rankEntry = tutor.subjectRankings?.find((r: any) => r.subjectId === actualSubjectId);
-      const rank = rankEntry ? rankEntry.rank : 3;
+      let rank: number;
+      if (useInterests) {
+        // Best (lowest) rank the tutor holds among the student's subjects of interest.
+        const ranks = (tutor.subjectRankings || [])
+          .filter((r: any) => interestIds.includes(r.subjectId))
+          .map((r: any) => r.rank as number);
+        rank = ranks.length ? Math.min(...ranks) : 3;
+      } else {
+        const actualSubjectId =
+          targetSubjectId || (tutor.subjectRankings && tutor.subjectRankings[0]?.subjectId);
+        const rankEntry = tutor.subjectRankings?.find((r: any) => r.subjectId === actualSubjectId);
+        rank = rankEntry ? rankEntry.rank : 3;
+      }
 
       let subjectScore = 0;
       if (rank === 1) subjectScore = 100;
