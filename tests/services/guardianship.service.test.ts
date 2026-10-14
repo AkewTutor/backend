@@ -33,6 +33,7 @@ vi.mock('../../src/config/db.js', () => ({
     },
     user: {
       create: vi.fn(),
+      findFirst: vi.fn(),
     },
     parentProfile: {
       findUnique: vi.fn(),
@@ -79,6 +80,26 @@ function resetAllMocks() {
   (dispatchNotification as any).mockResolvedValue(undefined);
   (recordAuditLog as any).mockResolvedValue(undefined);
   (prisma.parentProfile.findUnique as any).mockResolvedValue({ id: 'parent-profile-1' });
+  (prisma.user.findFirst as any).mockResolvedValue(null);
+}
+
+// Relationship as loaded by resendOrRegenerateInvite (student and parent with their users).
+function relFixture(overrides: Record<string, any> = {}) {
+  return {
+    id: 'rel-1',
+    relationshipType: 'MANDATORY_GUARDIAN',
+    status: 'INVITED',
+    inviteToken: 'tok-1',
+    student: {
+      userId: 'student-user-1',
+      user: { id: 'student-user-1', email: 'student@example.com', phone: null },
+    },
+    parent: {
+      userId: 'parent-1',
+      user: { id: 'parent-1', email: 'parent@example.com', phone: null },
+    },
+    ...overrides,
+  };
 }
 
 describe('addStudentAndInvite', () => {
@@ -149,26 +170,47 @@ describe('resendOrRegenerateInvite', () => {
   beforeEach(() => resetAllMocks());
 
   it('owner resends before activation — resets to a fresh 14-day window, not an extension', async () => {
-    (prisma.parentStudentRelationship.findUnique as any).mockResolvedValue({
-      id: 'rel-1',
-      parentId: 'parent-profile-1',
-      status: 'INVITED',
-    });
+    (prisma.parentStudentRelationship.findUnique as any).mockResolvedValue(relFixture());
     (prisma.parentStudentRelationship.update as any).mockResolvedValue({
       id: 'rel-1',
       inviteExpiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
     });
 
     await expect(resendOrRegenerateInvite('parent-1', 'rel-1')).resolves.toBeDefined();
-    expect(dispatchNotification).toHaveBeenCalled();
+    // The invitee (the student) is notified.
+    expect(dispatchNotification).toHaveBeenCalledWith(
+      'student-user-1',
+      'GUARDIAN_INVITE_RESEND',
+      expect.objectContaining({ channel: 'EMAIL', inviteToken: 'tok-1' }),
+    );
+  });
+
+  it('optional-guardian invite: the student resends and the guardian is notified', async () => {
+    (prisma.parentStudentRelationship.findUnique as any).mockResolvedValue(
+      relFixture({ relationshipType: 'OPTIONAL_GUARDIAN' }),
+    );
+    (prisma.parentStudentRelationship.update as any).mockResolvedValue({ id: 'rel-1' });
+
+    await expect(resendOrRegenerateInvite('student-user-1', 'rel-1')).resolves.toBeDefined();
+    expect(dispatchNotification).toHaveBeenCalledWith(
+      'parent-1',
+      'GUARDIAN_INVITE_RESEND',
+      expect.anything(),
+    );
+  });
+
+  it('optional-guardian invite: the invited guardian cannot resend it', async () => {
+    (prisma.parentStudentRelationship.findUnique as any).mockResolvedValue(
+      relFixture({ relationshipType: 'OPTIONAL_GUARDIAN' }),
+    );
+
+    await expect(resendOrRegenerateInvite('parent-1', 'rel-1')).rejects.toMatchObject({
+      statusCode: 403,
+    });
   });
 
   it('a non-owner resend attempt is rejected — IDOR', async () => {
-    (prisma.parentStudentRelationship.findUnique as any).mockResolvedValue({
-      id: 'rel-1',
-      parentId: 'parent-owner',
-      status: 'INVITED',
-    });
+    (prisma.parentStudentRelationship.findUnique as any).mockResolvedValue(relFixture());
 
     await expect(resendOrRegenerateInvite('parent-other', 'rel-1')).rejects.toMatchObject({
       statusCode: 403,
@@ -177,24 +219,18 @@ describe('resendOrRegenerateInvite', () => {
   });
 
   it('an already-activated relationship rejects the resend', async () => {
-    (prisma.parentStudentRelationship.findUnique as any).mockResolvedValue({
-      id: 'rel-1',
-      parentId: 'parent-profile-1',
-      status: 'ACTIVE',
-    });
+    (prisma.parentStudentRelationship.findUnique as any).mockResolvedValue(
+      relFixture({ status: 'ACTIVE' }),
+    );
 
     await expect(resendOrRegenerateInvite('parent-1', 'rel-1')).rejects.toMatchObject({
       statusCode: 409,
-      message: 'This student has already activated their account',
+      message: 'This invite was already activated or revoked.',
     });
   });
 
   it('repeated resends keep resetting the window — no cap, intentionally unlimited', async () => {
-    (prisma.parentStudentRelationship.findUnique as any).mockResolvedValue({
-      id: 'rel-1',
-      parentId: 'parent-profile-1',
-      status: 'INVITED',
-    });
+    (prisma.parentStudentRelationship.findUnique as any).mockResolvedValue(relFixture());
     (prisma.parentStudentRelationship.update as any).mockResolvedValue({ id: 'rel-1' });
 
     await resendOrRegenerateInvite('parent-1', 'rel-1');
@@ -354,6 +390,52 @@ describe('inviteOptionalGuardian', () => {
     expect(prisma.studentProfile.findUnique).toHaveBeenCalledWith({ where: { userId: 'u-1' } });
 
     expect(result).toMatchObject({ relationshipType: 'OPTIONAL_GUARDIAN', status: 'INVITED' });
+  });
+
+  it('an already registered parent is linked directly — no placeholder user, guardian is notified', async () => {
+    (prisma.studentProfile.findUnique as any).mockResolvedValue({
+      id: 'sp-1',
+      userId: 'u-1',
+      grade: 9,
+    });
+    (prisma.user.findFirst as any).mockResolvedValue({
+      id: 'guardian-user-1',
+      role: 'PARENT',
+      parentProfile: { id: 'pp-9' },
+    });
+    (prisma.parentStudentRelationship.findFirst as any).mockResolvedValue(null);
+    (prisma.parentStudentRelationship.create as any).mockResolvedValue({
+      id: 'rel-3',
+      relationshipType: 'OPTIONAL_GUARDIAN',
+      status: 'INVITED',
+    });
+
+    const result = await inviteOptionalGuardian('u-1', 'p1@test.local');
+
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(dispatchNotification).toHaveBeenCalledWith(
+      'guardian-user-1',
+      'GUARDIAN_INVITE',
+      expect.objectContaining({ inviteContact: 'p1@test.local' }),
+    );
+    expect(result).toMatchObject({ relationshipId: 'rel-3', status: 'INVITED' });
+  });
+
+  it('a contact that belongs to a non-parent account is rejected', async () => {
+    (prisma.studentProfile.findUnique as any).mockResolvedValue({
+      id: 'sp-1',
+      userId: 'u-1',
+      grade: 9,
+    });
+    (prisma.user.findFirst as any).mockResolvedValue({
+      id: 'u-2',
+      role: 'STUDENT',
+      parentProfile: null,
+    });
+
+    await expect(inviteOptionalGuardian('u-1', 's2@test.local')).rejects.toMatchObject({
+      statusCode: 409,
+    });
   });
 
   it('a Grade 1–5 student is blocked — defense in depth', async () => {

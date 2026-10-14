@@ -51,6 +51,16 @@ export async function resendInvite(req: AuthRequest, res: Response, next: NextFu
   }
 }
 
+export async function acceptInvite(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const { id } = req.params;
+    const result = await guardianshipService.acceptGuardianInvite(req.user!.id, id as string);
+    res.status(200).json({ statusCode: 200, success: true, message: 'OK', data: result });
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function activateInvite(req: AuthRequest, res: Response, next: NextFunction) {
   try {
     const { token } = req.params;

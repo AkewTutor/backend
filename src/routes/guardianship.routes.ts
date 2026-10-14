@@ -38,5 +38,6 @@ router.patch(
   guardianshipController.revokeRelationship,
 );
 router.post('/invites/:id/resend', guardianshipController.resendInvite);
+router.post('/invites/:id/accept', requireRole('PARENT'), guardianshipController.acceptInvite);
 
 export default router;

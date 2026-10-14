@@ -1,5 +1,7 @@
 // src/services/adminAnnouncement.service.ts
 import type { UserRole } from '@prisma/client';
+import { HTTP_STATUS } from '../constants/index.js';
+import ApiError from '../utils/ApiError.js';
 
 import { prisma } from '../config/db.js';
 import { dispatchNotification } from './notification.service.js';
@@ -117,4 +119,54 @@ export async function adjustNotificationRules(
   ]);
 
   return { announcements: items, page: safePage, limit: safeLimit, total };
+}
+
+// ──────────────────────────────────────────────────────────────
+// updateAnnouncement / deleteAnnouncement
+// ──────────────────────────────────────────────────────────────
+
+/** In-app notifications created for one announcement (payload.announcementId). */
+const announcementNotifications = (id: string) =>
+  ({
+    type: 'PLATFORM_ANNOUNCEMENT',
+    payload: { path: ['announcementId'], equals: id },
+  }) as const;
+
+/**
+ * Edit the text of a sent announcement. The audience is NOT editable (it was
+ * already fanned out). Existing in-app notifications are rewritten so users
+ * see the corrected text; nothing is re-sent.
+ */
+export async function updateAnnouncement(
+  id: string,
+  changes: { title?: string; body?: string },
+): Promise<AnnouncementDTO> {
+  const existing = await prisma.announcement.findUnique({ where: { id } });
+  if (!existing) throw new ApiError(HTTP_STATUS.NOT_FOUND, 'Announcement not found');
+
+  const title = changes.title ?? existing.title;
+  const body = changes.body ?? existing.body;
+
+  const [updated] = await prisma.$transaction([
+    prisma.announcement.update({ where: { id }, data: { title, body } }),
+    prisma.notification.updateMany({
+      where: announcementNotifications(id),
+      data: { payload: { announcementId: id, title, body } },
+    }),
+  ]);
+  return updated as AnnouncementDTO;
+}
+
+/**
+ * Delete an announcement and recall its in-app notifications. Already-sent
+ * SMS/email cannot be recalled.
+ */
+export async function deleteAnnouncement(id: string): Promise<void> {
+  const existing = await prisma.announcement.findUnique({ where: { id } });
+  if (!existing) throw new ApiError(HTTP_STATUS.NOT_FOUND, 'Announcement not found');
+
+  await prisma.$transaction([
+    prisma.notification.deleteMany({ where: announcementNotifications(id) }),
+    prisma.announcement.delete({ where: { id } }),
+  ]);
 }
