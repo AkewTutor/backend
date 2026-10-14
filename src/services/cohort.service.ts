@@ -19,12 +19,16 @@ export async function createOneToOneCohort(
   // the outer tx is waiting for the inner call. Symptom: Prisma's 5s
   // interactive-transaction timeout on `selectTutor`.
   tx?: any,
+  // Subject the student searched for; falls back to the student's match request.
+  subjectId?: string,
 ): Promise<any> {
   const client = tx ?? prisma;
 
   // If there's a match request, use its subject. Otherwise, just grab the
   // first subject (for integration tests).
-  const req = await client.matchRequest.findFirst({ where: { studentId } });
+  const req = subjectId
+    ? { subjectId }
+    : await client.matchRequest.findFirst({ where: { studentId } });
   let subId = req?.subjectId;
   if (!subId) {
     const sub = await client.subject.findFirst();
