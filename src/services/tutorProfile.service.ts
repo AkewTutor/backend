@@ -91,3 +91,24 @@ export async function rankSubjects(
     throw error;
   }
 }
+
+/**
+ * The caller's ranked subjects, ordered by rank, in the same shape PUT
+ * /tutors/me/subjects documents: { subjects: [{ subjectId, subjectName, rank }] }.
+ * Deactivated subjects are still returned, so a tutor who ranked one is not broken.
+ */
+export async function getRankedSubjects(callerId: string) {
+  const profile = await getProfile(callerId);
+  const rankings = await prisma.tutorSubjectRanking.findMany({
+    where: { tutorId: profile.id },
+    include: { subject: true },
+    orderBy: { rank: 'asc' },
+  });
+  return {
+    subjects: rankings.map((r) => ({
+      subjectId: r.subjectId,
+      subjectName: r.subject.name,
+      rank: r.rank,
+    })),
+  };
+}

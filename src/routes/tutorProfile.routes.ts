@@ -16,6 +16,7 @@ router.patch(
   tutorProfileController.updateProfile,
 );
 router.post('/me/resubmit-verification', tutorProfileController.resubmitVerification);
+router.get('/me/subjects', tutorProfileController.getSubjects);
 router.put('/me/subjects', validate(rankSubjectsSchema), tutorProfileController.rankSubjects);
 
 export default router;
