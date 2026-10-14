@@ -16,6 +16,47 @@ async function profileIdFor(userId: string): Promise<string> {
   return profile.id;
 }
 
+const minutesOfDay = (d: Date) => d.getUTCHours() * 60 + d.getUTCMinutes();
+
+type SlotLike = {
+  dayOfWeek?: number | null;
+  startTime: Date;
+  endTime: Date;
+  isRecurring: boolean;
+};
+type Segment = { day: number; start: number; end: number };
+
+const sameUtcDate = (a: Date, b: Date) =>
+  a.toISOString().slice(0, 10) === b.toISOString().slice(0, 10);
+
+// Weekly view of a slot: recurring = one segment on its dayOfWeek; one-off = segment(s) on its UTC weekday(s).
+function segmentsOf(slot: SlotLike): Segment[] {
+  const start = new Date(slot.startTime);
+  const end = new Date(slot.endTime);
+  const s = minutesOfDay(start);
+  const e = minutesOfDay(end);
+  if (slot.isRecurring) {
+    return [{ day: slot.dayOfWeek as number, start: s, end: e <= s ? 1440 : e }];
+  }
+  if (sameUtcDate(start, end)) return [{ day: start.getUTCDay(), start: s, end: e }];
+  return [
+    { day: start.getUTCDay(), start: s, end: 1440 },
+    { day: end.getUTCDay(), start: 0, end: e },
+  ];
+}
+
+function slotsOverlap(a: SlotLike, b: SlotLike): boolean {
+  if (!a.isRecurring && !b.isRecurring) {
+    return (
+      new Date(a.startTime) < new Date(b.endTime) && new Date(a.endTime) > new Date(b.startTime)
+    );
+  }
+  const bSegs = segmentsOf(b);
+  return segmentsOf(a).some((x) =>
+    bSegs.some((y) => x.day === y.day && x.start < y.end && x.end > y.start),
+  );
+}
+
 export async function setSlots(
   userId: string,
   input: { dayOfWeek?: number; startTime: Date; endTime: Date; isRecurring: boolean },
@@ -24,6 +65,10 @@ export async function setSlots(
     throw new ApiError(400, 'End time must be after start time');
   }
   const tutorId = await profileIdFor(userId);
+  const existing = await prisma.availabilitySlot.findMany({ where: { tutorId } });
+  if (existing.some((s) => slotsOverlap(input, s))) {
+    throw new ApiError(409, 'This time overlaps a slot you already have');
+  }
   return prisma.availabilitySlot.create({
     data: {
       tutorId,
@@ -41,8 +86,6 @@ export async function listSlots(userId: string) {
     where: { tutorId },
   });
 }
-
-const minutesOfDay = (d: Date) => d.getUTCHours() * 60 + d.getUTCMinutes();
 
 export async function removeSlot(userId: string, slotId: string) {
   const tutorId = await profileIdFor(userId);
