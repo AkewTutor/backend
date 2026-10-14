@@ -4,8 +4,11 @@ import { Router } from 'express';
 import * as controller from '../controllers/adminAnnouncement.controller.js';
 import authMiddleware, { requireRole } from '../middlewares/auth.middleware.js';
 import validate from '../middlewares/validate.middleware.js';
-import { createAnnouncementSchema } from '../schemas/adminAnnouncement.schema.js';
-
+import {
+  createAnnouncementSchema,
+  deleteAnnouncementSchema,
+  updateAnnouncementSchema,
+} from '../schemas/adminAnnouncement.schema.js';
 export const adminAnnouncementRouter = Router();
 
 // ── Admin trust actions — Admin-only ──────────────────────────────
@@ -22,4 +25,20 @@ adminAnnouncementRouter.get(
   authMiddleware,
   requireRole('ADMIN'),
   controller.listAnnouncements,
+);
+
+adminAnnouncementRouter.patch(
+  '/:id',
+  authMiddleware,
+  requireRole('ADMIN'),
+  validate(updateAnnouncementSchema),
+  controller.updateAnnouncement,
+);
+
+adminAnnouncementRouter.delete(
+  '/:id',
+  authMiddleware,
+  requireRole('ADMIN'),
+  validate(deleteAnnouncementSchema),
+  controller.deleteAnnouncement,
 );
