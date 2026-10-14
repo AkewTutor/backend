@@ -70,3 +70,34 @@ export async function listAnnouncements(
     next(err);
   }
 }
+
+export async function updateAnnouncement(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const { title, body } = req.body;
+    const result = await adminAnnouncementService.updateAnnouncement(req.params.id as string, {
+      title,
+      body,
+    });
+    send(res, 200, result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function deleteAnnouncement(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const id = req.params.id as string;
+    await adminAnnouncementService.deleteAnnouncement(id);
+    send(res, 200, { id });
+  } catch (err) {
+    next(err);
+  }
+}
