@@ -52,7 +52,7 @@ async function findExactMatchTutors(
     availabilitySlots: true,
     subjectRankings: true,
   };
-  const verified = { verificationStatus: 'VERIFIED' };
+  const verified = { verificationStatus: 'VERIFIED' } as const;
   const best = new Map<string, ExactMatch>();
   for (const subjectId of subjectIds) {
     let queryRank = 1;

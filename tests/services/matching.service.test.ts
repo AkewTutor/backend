@@ -1177,7 +1177,7 @@ describe('selectTutor', () => {
       tutorId,
     });
 
-    await selectTutor(studentId, 'STUDENT', undefined, tutorId);
+    await selectTutor(studentId, 'STUDENT', undefined, tutorId, subjectId);
 
     expect(cohortService.createOneToOneCohort).toHaveBeenCalledTimes(1);
   });
