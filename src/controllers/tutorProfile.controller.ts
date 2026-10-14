@@ -37,3 +37,12 @@ export async function rankSubjects(req: AuthRequest, res: Response, next: NextFu
     next(error);
   }
 }
+
+export async function getSubjects(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const result = await tutorProfileService.getRankedSubjects(req.user!.id);
+    res.status(200).json({ statusCode: 200, success: true, message: 'OK', data: result });
+  } catch (error) {
+    next(error);
+  }
+}
