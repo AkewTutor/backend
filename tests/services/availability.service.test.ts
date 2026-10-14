@@ -35,6 +35,7 @@ function resetAllMocks() {
   vi.clearAllMocks();
   // caller is user 'tutor-1'; their TutorProfile id happens to be 'tutor-1' too
   (prisma.tutorProfile.findUnique as any).mockResolvedValue({ id: 'tutor-1' });
+  (prisma.availabilitySlot.findMany as any).mockResolvedValue([]);
 }
 
 const futureSession = (startIso: string, endIso: string) => ({
@@ -80,6 +81,71 @@ describe('setSlots / listSlots', () => {
 
     const callArg = (prisma.availabilitySlot.findMany as any).mock.calls[0][0];
     expect(callArg.where).toMatchObject({ tutorId: 'tutor-1' });
+  });
+
+  it('rejects a recurring slot that overlaps an existing one on the same day (409)', async () => {
+    (prisma.availabilitySlot.findMany as any).mockResolvedValue([
+      {
+        dayOfWeek: 1,
+        isRecurring: true,
+        startTime: new Date('2026-06-01T13:00:00Z'),
+        endTime: new Date('2026-06-01T15:00:00Z'),
+      },
+    ]);
+    await expect(
+      setSlots('tutor-1', {
+        dayOfWeek: 1,
+        isRecurring: true,
+        startTime: new Date('2026-06-01T14:00:00Z'),
+        endTime: new Date('2026-06-01T16:00:00Z'),
+      } as any),
+    ).rejects.toMatchObject({ statusCode: 409 });
+  });
+
+  it('allows back-to-back slots and other weekdays', async () => {
+    (prisma.availabilitySlot.findMany as any).mockResolvedValue([
+      {
+        dayOfWeek: 1,
+        isRecurring: true,
+        startTime: new Date('2026-06-01T13:00:00Z'),
+        endTime: new Date('2026-06-01T15:00:00Z'),
+      },
+    ]);
+    (prisma.availabilitySlot.create as any).mockResolvedValue({ id: 'slot-2' });
+    await expect(
+      setSlots('tutor-1', {
+        dayOfWeek: 1,
+        isRecurring: true,
+        startTime: new Date('2026-06-01T15:00:00Z'),
+        endTime: new Date('2026-06-01T16:00:00Z'),
+      } as any),
+    ).resolves.toMatchObject({ id: 'slot-2' });
+    await expect(
+      setSlots('tutor-1', {
+        dayOfWeek: 2,
+        isRecurring: true,
+        startTime: new Date('2026-06-02T13:00:00Z'),
+        endTime: new Date('2026-06-02T15:00:00Z'),
+      } as any),
+    ).resolves.toMatchObject({ id: 'slot-2' });
+  });
+
+  it('rejects a one-off that falls on a recurring slot weekday and time (409)', async () => {
+    (prisma.availabilitySlot.findMany as any).mockResolvedValue([
+      {
+        dayOfWeek: 1,
+        isRecurring: true,
+        startTime: new Date('2026-06-01T13:00:00Z'),
+        endTime: new Date('2026-06-01T15:00:00Z'),
+      },
+    ]);
+    await expect(
+      setSlots('tutor-1', {
+        isRecurring: false,
+        startTime: new Date('2026-10-19T14:00:00Z'),
+        endTime: new Date('2026-10-19T15:00:00Z'),
+      } as any),
+    ).rejects.toMatchObject({ statusCode: 409 });
   });
 });
 
