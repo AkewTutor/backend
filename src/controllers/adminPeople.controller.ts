@@ -44,3 +44,13 @@ export const suspendAccount = asyncHandler(
     res.status(200).json({ statusCode: 200, success: true, message: 'OK', data: result });
   },
 );
+
+export const reactivateAccount = asyncHandler(
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    const userId = req.params.userId as string;
+    const adminId = (req as any).user.id;
+
+    const result = await adminPeopleService.reactivateAccount(userId, adminId);
+    res.status(200).json({ statusCode: 200, success: true, message: 'OK', data: result });
+  },
+);
