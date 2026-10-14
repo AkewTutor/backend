@@ -157,13 +157,16 @@ export async function recommendTutorsWithMatchPercent(
     where: { studentId: studentIdToUse, status: { in: ['SEARCHING', 'ZERO_MATCH_PENDING'] } },
   });
 
-  const targetSubjectId = query?.subjectId || activeRequest?.subjectId;
+  // The page is profile-driven (FR-SP-020), so an open request must not override the
+  // student's subjects of interest. Subject priority: explicit query, then interests,
+  // then the open request's subject only when the student has no interests.
+  const explicitSubjectId: string | undefined = query?.subjectId || undefined;
 
-  if (!activeRequest && targetSubjectId) {
+  if (!activeRequest && explicitSubjectId) {
     activeRequest = await prisma.matchRequest.create({
       data: {
         studentId: studentIdToUse,
-        subjectId: targetSubjectId,
+        subjectId: explicitSubjectId,
         format: 'ONE_TO_ONE',
         path: 'PATH_A',
         status: 'SEARCHING',
@@ -175,9 +178,15 @@ export async function recommendTutorsWithMatchPercent(
   const interestIds: string[] = Array.isArray(student.subjectsOfInterest)
     ? (student.subjectsOfInterest as unknown[]).filter((x): x is string => typeof x === 'string')
     : [];
-  const subjectIds = targetSubjectId ? [targetSubjectId] : interestIds;
+  const subjectIds = explicitSubjectId
+    ? [explicitSubjectId]
+    : interestIds.length > 0
+      ? interestIds
+      : activeRequest?.subjectId
+        ? [activeRequest.subjectId]
+        : [];
 
-  // Nothing to match on (no subject, no open request, no subjects of interest): do not list
+  // Nothing to match on (no subject, no subjects of interest, no open request): do not list
   // every tutor at a meaningless 100%; tell the client to ask for the profile instead.
   if (subjectIds.length === 0) {
     return { matchRequestId: null, zeroMatchSince: null, recommendations: [], needsProfile: true };
@@ -366,22 +375,37 @@ export async function triggerNoExactMatch(
   }
 
   if (!matchReq) {
-    if (!subjectId) {
+    // No request yet (search is read-only): use the subject sent by the client, else the
+    // student's first subject of interest (the admin assigns manually and sees the profile).
+    let requestSubjectId = subjectId;
+    if (!requestSubjectId) {
+      const student: any = await prisma.studentProfile.findUnique({ where: { id: studentId } });
+      const interests: unknown[] = Array.isArray(student?.subjectsOfInterest)
+        ? student.subjectsOfInterest
+        : [];
+      requestSubjectId = interests.find((x): x is string => typeof x === 'string');
+    }
+    if (!requestSubjectId) {
       throw new ApiError(400, 'subjectId is required when there is no search in progress');
     }
     matchReq = await prisma.matchRequest.create({
       data: {
         studentId,
-        subjectId,
+        subjectId: requestSubjectId,
         format: 'ONE_TO_ONE',
         path: 'PATH_B',
         status: 'PENDING_ADMIN_ASSIGNMENT',
       },
     });
   } else {
+    // A reused request takes the subject the student just searched for.
     matchReq = await prisma.matchRequest.update({
       where: { id: matchReq.id },
-      data: { status: 'PENDING_ADMIN_ASSIGNMENT', path: 'PATH_B' },
+      data: {
+        status: 'PENDING_ADMIN_ASSIGNMENT',
+        path: 'PATH_B',
+        ...(subjectId ? { subjectId } : {}),
+      },
     });
   }
 

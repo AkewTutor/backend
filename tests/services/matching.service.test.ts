@@ -888,6 +888,68 @@ describe('recommendations use the same exact-match set as search', () => {
   });
 });
 
+describe('recommendTutorsWithMatchPercent — subject priority', () => {
+  beforeEach(() => resetAllMocks());
+
+  it('the student interests win over an open request for another subject', async () => {
+    (prisma.studentProfile.findUnique as any).mockResolvedValue(
+      baseStudent({ subjectsOfInterest: [subjectId] }),
+    );
+    (prisma.matchRequest.findFirst as any).mockResolvedValue({
+      id: 'stale',
+      status: 'SEARCHING',
+      subjectId: 'stale-subject',
+      zeroMatchSince: null,
+    });
+    (prisma.tutorProfile.findMany as any).mockResolvedValue([]);
+
+    await recommendTutorsWithMatchPercent(studentId, 'STUDENT', undefined);
+
+    const where = (prisma.tutorProfile.findMany as any).mock.calls[0][0].where;
+    expect(JSON.stringify(where)).toContain(subjectId);
+    expect(JSON.stringify(where)).not.toContain('stale-subject');
+  });
+
+  it('an explicit subjectId wins over both interests and the open request', async () => {
+    (prisma.studentProfile.findUnique as any).mockResolvedValue(
+      baseStudent({ subjectsOfInterest: ['interest-subject'] }),
+    );
+    (prisma.matchRequest.findFirst as any).mockResolvedValue({
+      id: 'mr',
+      status: 'SEARCHING',
+      subjectId: 'stale-subject',
+      zeroMatchSince: null,
+    });
+    (prisma.tutorProfile.findMany as any).mockResolvedValue([]);
+
+    await recommendTutorsWithMatchPercent(studentId, 'STUDENT', undefined, { subjectId });
+
+    const where = (prisma.tutorProfile.findMany as any).mock.calls[0][0].where;
+    expect(JSON.stringify(where)).toContain(subjectId);
+    expect(JSON.stringify(where)).not.toContain('interest-subject');
+  });
+
+  it('with no interests the open request subject is the fallback', async () => {
+    (prisma.studentProfile.findUnique as any).mockResolvedValue(
+      baseStudent({ subjectsOfInterest: [] }),
+    );
+    (prisma.matchRequest.findFirst as any).mockResolvedValue({
+      id: 'mr',
+      status: 'SEARCHING',
+      subjectId,
+      zeroMatchSince: null,
+    });
+    (prisma.tutorProfile.findMany as any).mockResolvedValue([]);
+
+    const result = await recommendTutorsWithMatchPercent(studentId, 'STUDENT', undefined);
+
+    expect(result.needsProfile).toBeUndefined();
+    expect(JSON.stringify((prisma.tutorProfile.findMany as any).mock.calls[0][0].where)).toContain(
+      subjectId,
+    );
+  });
+});
+
 describe('recommendTutorsWithMatchPercent — profile not ready', () => {
   beforeEach(() => resetAllMocks());
 
@@ -985,9 +1047,49 @@ describe('selectTutor', () => {
 
   it('requires a subjectId when there is no search in progress (400)', async () => {
     (prisma.matchRequest.findFirst as any).mockResolvedValue(null);
+    (prisma.studentProfile.findUnique as any).mockResolvedValue(
+      baseStudent({ subjectsOfInterest: [] }),
+    );
 
     await expect(triggerNoExactMatch(studentId, 'STUDENT', undefined)).rejects.toMatchObject({
       statusCode: 400,
+    });
+  });
+
+  it('no-exact-match with no request falls back to the first subject of interest', async () => {
+    (prisma.matchRequest.findFirst as any).mockResolvedValue(null);
+    (prisma.studentProfile.findUnique as any).mockResolvedValue(
+      baseStudent({ subjectsOfInterest: [subjectId, 'other-subject'] }),
+    );
+    (prisma.matchRequest.create as any).mockResolvedValue({
+      id: 'mr-new',
+      status: 'PENDING_ADMIN_ASSIGNMENT',
+    });
+
+    const result = await triggerNoExactMatch(studentId, 'STUDENT', undefined);
+
+    expect(prisma.matchRequest.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ subjectId, path: 'PATH_B' }),
+    });
+    expect(result).toEqual({ matchRequestId: 'mr-new', status: 'PENDING_ADMIN_ASSIGNMENT' });
+  });
+
+  it('no-exact-match re-points a reused request at the subject sent by the client', async () => {
+    (prisma.matchRequest.findFirst as any).mockResolvedValue({
+      id: 'mr-1',
+      status: 'SEARCHING',
+      subjectId: 'old-subject',
+    });
+    (prisma.matchRequest.update as any).mockResolvedValue({
+      id: 'mr-1',
+      status: 'PENDING_ADMIN_ASSIGNMENT',
+    });
+
+    await triggerNoExactMatch(studentId, 'STUDENT', undefined, subjectId);
+
+    expect(prisma.matchRequest.update).toHaveBeenCalledWith({
+      where: { id: 'mr-1' },
+      data: { status: 'PENDING_ADMIN_ASSIGNMENT', path: 'PATH_B', subjectId },
     });
   });
 
