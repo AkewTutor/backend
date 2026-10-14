@@ -116,3 +116,22 @@ export async function suspendAccount(
 
   return { success: true };
 }
+
+export async function reactivateAccount(userId: string, adminId: string) {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) throw new ApiError(404, 'User not found');
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: { status: 'ACTIVE' },
+  });
+
+  await recordAuditLog({
+    actor: adminId,
+    action: 'ACCOUNT_REACTIVATED',
+    target: userId,
+    timestamp: new Date(),
+  });
+
+  return { userId, status: 'ACTIVE' as const };
+}
