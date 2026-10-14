@@ -4,6 +4,113 @@ import { assertAccountStatusAllowsAccess } from './studentProfile.service.js';
 import * as cohortService from './cohort.service.js';
 import ApiError from '../utils/ApiError.js';
 
+// Tutors are shown to students as "First L." (06-api/03 examples), never the full name.
+function tutorDisplayName(name?: string | null): string {
+  const parts = (name ?? '').trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return 'Tutor';
+  if (parts.length === 1) return parts[0];
+  return `${parts[0]} ${parts[parts.length - 1][0].toUpperCase()}.`;
+}
+
+type ExactMatch = { tutor: any; rank: number };
+
+// Minutes of the student's preferred slots that overlap the tutor's availability.
+function scheduleOverlapMinutes(preference: any[], tutorSlots: any[]) {
+  let totalMinutes = 0;
+  let overlapMinutes = 0;
+  for (const sSlot of preference) {
+    const sStart = new Date(sSlot.startTime).getTime();
+    const sEnd = new Date(sSlot.endTime).getTime();
+    totalMinutes += (sEnd - sStart) / 60000;
+    for (const tSlot of tutorSlots) {
+      const startMax = Math.max(sStart, new Date(tSlot.startTime).getTime());
+      const endMin = Math.min(sEnd, new Date(tSlot.endTime).getTime());
+      if (startMax < endMin) overlapMinutes += (endMin - startMax) / 60000;
+    }
+  }
+  return { totalMinutes, overlapMinutes };
+}
+
+// The single definition of an "exact match", shared by search and recommendations
+// (Doc 02 Section 8: hard filters first; a tutor who fails one is never scored).
+//  1. Verified tutors who rank the subject 1st; only when there are none, 2nd (FR-TU-008).
+//     With several subjects (subjects of interest) each subject is resolved on its own and
+//     a tutor keeps the best rank they hold.
+//  2. Day-of-week filter (recurring slots carry dayOfWeek, one-off slots only a start time).
+//  3. Budget is a hard filter against the 1-to-1 price (price is per format, not per tutor).
+//  4. If the student has a learning-schedule preference, the tutor needs an overlapping slot.
+// NOTE: TutorProfile has no language column, so `language` is accepted but not applied.
+// Grade never filters either (tutors teach Grades 1-12).
+async function findExactMatchTutors(
+  student: any,
+  subjectIds: string[],
+  query: any = {},
+  withPrice = false,
+): Promise<{ matches: ExactMatch[]; price: string | null }> {
+  const include = {
+    user: { select: { name: true } },
+    availabilitySlots: true,
+    subjectRankings: true,
+  };
+  const verified = { verificationStatus: 'VERIFIED' } as const;
+  const best = new Map<string, ExactMatch>();
+  for (const subjectId of subjectIds) {
+    let queryRank = 1;
+    let found: any[] = await prisma.tutorProfile.findMany({
+      where: { ...verified, subjectRankings: { some: { subjectId, rank: 1 } } },
+      include,
+    });
+    if (found.length === 0) {
+      queryRank = 2;
+      found = await prisma.tutorProfile.findMany({
+        where: { ...verified, subjectRankings: { some: { subjectId, rank: 2 } } },
+        include,
+      });
+    }
+    for (const tutor of found) {
+      const entry = (tutor.subjectRankings ?? []).find((r: any) => r.subjectId === subjectId);
+      const rank: number = entry?.rank ?? queryRank;
+      const prev = best.get(tutor.id);
+      if (!prev || rank < prev.rank) best.set(tutor.id, { tutor, rank });
+    }
+  }
+  let matches: ExactMatch[] = [...best.values()];
+
+  if (query.day !== undefined && query.day !== '' && !Number.isNaN(Number(query.day))) {
+    const day = Number(query.day);
+    matches = matches.filter(({ tutor }) =>
+      (tutor.availabilitySlots ?? []).some(
+        (slot: any) => (slot.dayOfWeek ?? new Date(slot.startTime).getUTCDay()) === day,
+      ),
+    );
+  }
+
+  // The price is only looked up when it is shown (search) or a budget has to be checked.
+  const budgetRaw = query.budget ?? query.priceMax;
+  const hasBudget = budgetRaw !== undefined && budgetRaw !== '';
+  const pricing =
+    withPrice || hasBudget
+      ? await prisma.pricingConfig.findFirst({ where: { format: 'ONE_TO_ONE', isActive: true } })
+      : null;
+  const price = pricing ? pricing.pricePerStudentPerHour.toString() : null;
+  if (price !== null && hasBudget) {
+    const max = Number(budgetRaw);
+    if (!Number.isNaN(max) && Number(price) > max) matches = [];
+  }
+
+  const preference: any[] = Array.isArray(student.learningSchedulePreference)
+    ? student.learningSchedulePreference
+    : [];
+  if (preference.length > 0) {
+    matches = matches.filter(
+      ({ tutor }) =>
+        scheduleOverlapMinutes(preference, tutor.availabilitySlots ?? []).overlapMinutes > 0,
+    );
+  }
+
+  return { matches, price };
+}
+
 export async function searchOneToOneTutors(
   callerId: string,
   callerRole: string,
@@ -22,37 +129,19 @@ export async function searchOneToOneTutors(
     );
   }
 
-  let filter: any = { verificationStatus: 'VERIFIED' };
+  // Searching is read-only: the Path A request is created when the student acts
+  // (selects a tutor or clicks "no exact match"), never as a side effect of a search.
+  const { matches, price } = await findExactMatchTutors(student, [query.subjectId], query, true);
 
-  // NOTE: TutorProfile has no price/language columns yet, so budget/language
-  // query params are accepted but not applied.
-  let tutors = await prisma.tutorProfile.findMany({
-    where: {
-      ...filter,
-      subjectRankings: {
-        some: {
-          subjectId: query.subjectId,
-          rank: 1,
-        },
-      },
-    },
-  });
-
-  if (tutors.length === 0) {
-    tutors = await prisma.tutorProfile.findMany({
-      where: {
-        ...filter,
-        subjectRankings: {
-          some: {
-            subjectId: query.subjectId,
-            rank: 2,
-          },
-        },
-      },
-    });
-  }
-
-  return { tutors: tutors.map((t: any) => ({ tutorId: t.id, ...t })) };
+  return {
+    tutors: matches.map(({ tutor: t }) => ({
+      tutorId: t.id,
+      name: tutorDisplayName(t.user?.name),
+      profilePictureUrl: t.profilePictureUrl ?? null,
+      verificationStatus: t.verificationStatus,
+      pricePerStudentPerHour: price,
+    })),
+  };
 }
 
 export async function recommendTutorsWithMatchPercent(
@@ -68,13 +157,16 @@ export async function recommendTutorsWithMatchPercent(
     where: { studentId: studentIdToUse, status: { in: ['SEARCHING', 'ZERO_MATCH_PENDING'] } },
   });
 
-  const targetSubjectId = query?.subjectId || activeRequest?.subjectId;
+  // The page is profile-driven (FR-SP-020), so an open request must not override the
+  // student's subjects of interest. Subject priority: explicit query, then interests,
+  // then the open request's subject only when the student has no interests.
+  const explicitSubjectId: string | undefined = query?.subjectId || undefined;
 
-  if (!activeRequest && targetSubjectId) {
+  if (!activeRequest && explicitSubjectId) {
     activeRequest = await prisma.matchRequest.create({
       data: {
         studentId: studentIdToUse,
-        subjectId: targetSubjectId,
+        subjectId: explicitSubjectId,
         format: 'ONE_TO_ONE',
         path: 'PATH_A',
         status: 'SEARCHING',
@@ -82,42 +174,29 @@ export async function recommendTutorsWithMatchPercent(
     });
   }
 
-  let filter: any = { verificationStatus: 'VERIFIED' };
-
   // With no explicit subject, fall back to the student's subjects of interest (FR-SP-008).
   const interestIds: string[] = Array.isArray(student.subjectsOfInterest)
     ? (student.subjectsOfInterest as unknown[]).filter((x): x is string => typeof x === 'string')
     : [];
-  const useInterests = !targetSubjectId && interestIds.length > 0;
+  const subjectIds = explicitSubjectId
+    ? [explicitSubjectId]
+    : interestIds.length > 0
+      ? interestIds
+      : activeRequest?.subjectId
+        ? [activeRequest.subjectId]
+        : [];
 
-  let whereClause: any = { ...filter };
-  if (targetSubjectId) {
-    whereClause.subjectRankings = { some: { subjectId: targetSubjectId } };
-  } else if (useInterests) {
-    whereClause.subjectRankings = { some: { subjectId: { in: interestIds } } };
+  // Nothing to match on (no subject, no subjects of interest, no open request): do not list
+  // every tutor at a meaningless 100%; tell the client to ask for the profile instead.
+  if (subjectIds.length === 0) {
+    return { matchRequestId: null, zeroMatchSince: null, recommendations: [], needsProfile: true };
   }
 
-  let allTutors = await prisma.tutorProfile.findMany({
-    where: whereClause,
-    include: { subjectRankings: true },
-  });
+  // Same candidate set as search; recommendations only add the score on top.
+  const { matches } = await findExactMatchTutors(student, subjectIds, query ?? {});
 
-  const recommendations = allTutors
-    .map((tutor: any) => {
-      let rank: number;
-      if (useInterests) {
-        // Best (lowest) rank the tutor holds among the student's subjects of interest.
-        const ranks = (tutor.subjectRankings || [])
-          .filter((r: any) => interestIds.includes(r.subjectId))
-          .map((r: any) => r.rank as number);
-        rank = ranks.length ? Math.min(...ranks) : 3;
-      } else {
-        const actualSubjectId =
-          targetSubjectId || (tutor.subjectRankings && tutor.subjectRankings[0]?.subjectId);
-        const rankEntry = tutor.subjectRankings?.find((r: any) => r.subjectId === actualSubjectId);
-        rank = rankEntry ? rankEntry.rank : 3;
-      }
-
+  const recommendations = matches
+    .map(({ tutor, rank }) => {
       let subjectScore = 0;
       if (rank === 1) subjectScore = 100;
       else if (rank === 2) subjectScore = 70;
@@ -131,47 +210,27 @@ export async function recommendTutorsWithMatchPercent(
       }
 
       let scheduleScore = 100;
-      if (
-        student.learningSchedulePreference &&
-        Array.isArray(student.learningSchedulePreference) &&
-        student.learningSchedulePreference.length > 0
-      ) {
-        const studentTotalMinutes = student.learningSchedulePreference.reduce(
-          (acc: number, slot: any) => {
-            return (
-              acc + (new Date(slot.endTime).getTime() - new Date(slot.startTime).getTime()) / 60000
-            );
-          },
-          0,
+      const preference: any[] = Array.isArray(student.learningSchedulePreference)
+        ? student.learningSchedulePreference
+        : [];
+      if (preference.length > 0) {
+        const { totalMinutes, overlapMinutes } = scheduleOverlapMinutes(
+          preference,
+          tutor.availabilitySlots || [],
         );
-
-        let overlapMinutes = 0;
-        const tutorSlots = tutor.availabilitySlots || [];
-        for (const sSlot of student.learningSchedulePreference) {
-          const sStart = new Date((sSlot as any).startTime).getTime();
-          const sEnd = new Date((sSlot as any).endTime).getTime();
-
-          for (const tSlot of tutorSlots) {
-            const tStart = new Date((tSlot as any).startTime).getTime();
-            const tEnd = new Date((tSlot as any).endTime).getTime();
-
-            const startMax = Math.max(sStart, tStart);
-            const endMin = Math.min(sEnd, tEnd);
-            if (startMax < endMin) {
-              overlapMinutes += (endMin - startMax) / 60000;
-            }
-          }
-        }
-
-        if (studentTotalMinutes > 0) {
-          scheduleScore = Math.min(100, (overlapMinutes / studentTotalMinutes) * 100);
+        if (totalMinutes > 0) {
+          scheduleScore = Math.min(100, (overlapMinutes / totalMinutes) * 100);
         }
       }
 
       const finalScore = 0.4 * subjectScore + 0.35 * styleScore + 0.25 * scheduleScore;
-      const matchPercentage = Math.round(finalScore);
 
-      return { tutorId: tutor.id, matchPercentage, ...tutor };
+      return {
+        tutorId: tutor.id,
+        name: tutorDisplayName(tutor.user?.name),
+        profilePictureUrl: tutor.profilePictureUrl ?? null,
+        matchPercentage: Math.round(finalScore),
+      };
     })
     .sort((a: any, b: any) => b.matchPercentage - a.matchPercentage)
     .slice(0, 15);
@@ -188,14 +247,28 @@ export async function selectTutor(
   callerRole: string,
   overrideStudentId: string | undefined,
   tutorId: string,
+  requestedSubjectId?: string,
 ): Promise<any> {
   const studentId = callerRole === 'STUDENT' ? callerId : overrideStudentId || callerId;
   await assertAccountStatusAllowsAccess(studentId);
 
-  const tutor = await prisma.tutorProfile.findUnique({ where: { id: tutorId } });
+  const tutor: any = await prisma.tutorProfile.findUnique({
+    where: { id: tutorId },
+    include: { subjectRankings: true },
+  });
   if (!tutor || tutor.verificationStatus !== 'VERIFIED') {
     throw new ApiError(400, 'Selected tutor is not eligible');
   }
+
+  // Subject of the new cohort, in order: the one sent by the client, the open Path A request
+  // (resolved below), then the tutor's best-ranked subject among the student's interests.
+  const student: any = await prisma.studentProfile.findUnique({ where: { id: studentId } });
+  const interestIds: string[] = Array.isArray(student?.subjectsOfInterest)
+    ? (student.subjectsOfInterest as unknown[]).filter((x): x is string => typeof x === 'string')
+    : [];
+  const interestSubjectId: string | undefined = (tutor.subjectRankings ?? [])
+    .filter((r: any) => interestIds.includes(r.subjectId))
+    .sort((a: any, b: any) => a.rank - b.rank)[0]?.subjectId;
 
   try {
     return await prisma.$transaction(async (tx) => {
@@ -212,8 +285,16 @@ export async function selectTutor(
         );
       }
 
+      // The student's own Path A search (created by search/recommendations) is the very
+      // request this selection resolves; any other in-flight request blocks a new match.
       const existingMatch = await tx.matchRequest.findFirst({
-        where: { studentId, status: { in: ['SEARCHING', 'PENDING_ADMIN_ASSIGNMENT'] } },
+        where: {
+          studentId,
+          OR: [
+            { status: 'PENDING_ADMIN_ASSIGNMENT' },
+            { status: 'SEARCHING', NOT: { path: 'PATH_A' } },
+          ],
+        },
       });
       if (existingMatch) {
         throw new ApiError(409, 'You already have a pending or active match');
@@ -225,12 +306,48 @@ export async function selectTutor(
         throw new ApiError(409, 'You already have a pending or active match');
       }
 
+      const searchRequest = await tx.matchRequest.findFirst({
+        where: { studentId, path: 'PATH_A', status: 'SEARCHING' },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      const cohortSubjectId = requestedSubjectId ?? searchRequest?.subjectId ?? interestSubjectId;
+      if (!cohortSubjectId) {
+        throw new ApiError(400, 'Choose a subject first');
+      }
+
       // Pass `tx` to the cohort service so the cohort + membership writes
       // enlist in this transaction and on this connection. Without it,
       // the FK check on the nested CohortMembership insert blocks against
       // the `FOR UPDATE` lock this transaction holds on StudentProfile,
       // and Prisma's interactive-transaction timeout fires at 5s.
-      return await cohortService.createOneToOneCohort(studentId, tutorId, tx);
+      const cohort = await cohortService.createOneToOneCohort(
+        studentId,
+        tutorId,
+        tx,
+        cohortSubjectId,
+      );
+
+      if (searchRequest) {
+        await tx.matchRequest.update({
+          where: { id: searchRequest.id },
+          data: { status: 'MATCHED', tutorId, resultingCohortId: cohort.cohortId },
+        });
+      } else {
+        // Selected straight from search results (no request yet): record the resolved match.
+        await tx.matchRequest.create({
+          data: {
+            studentId,
+            subjectId: cohortSubjectId,
+            format: 'ONE_TO_ONE',
+            path: 'PATH_A',
+            status: 'MATCHED',
+            tutorId,
+            resultingCohortId: cohort.cohortId,
+          },
+        });
+      }
+      return cohort;
     });
   } catch (e: any) {
     if (e.code === 'P2003') {
@@ -258,22 +375,37 @@ export async function triggerNoExactMatch(
   }
 
   if (!matchReq) {
-    if (!subjectId) {
+    // No request yet (search is read-only): use the subject sent by the client, else the
+    // student's first subject of interest (the admin assigns manually and sees the profile).
+    let requestSubjectId = subjectId;
+    if (!requestSubjectId) {
+      const student: any = await prisma.studentProfile.findUnique({ where: { id: studentId } });
+      const interests: unknown[] = Array.isArray(student?.subjectsOfInterest)
+        ? student.subjectsOfInterest
+        : [];
+      requestSubjectId = interests.find((x): x is string => typeof x === 'string');
+    }
+    if (!requestSubjectId) {
       throw new ApiError(400, 'subjectId is required when there is no search in progress');
     }
     matchReq = await prisma.matchRequest.create({
       data: {
         studentId,
-        subjectId,
+        subjectId: requestSubjectId,
         format: 'ONE_TO_ONE',
         path: 'PATH_B',
         status: 'PENDING_ADMIN_ASSIGNMENT',
       },
     });
   } else {
+    // A reused request takes the subject the student just searched for.
     matchReq = await prisma.matchRequest.update({
       where: { id: matchReq.id },
-      data: { status: 'PENDING_ADMIN_ASSIGNMENT', path: 'PATH_B' },
+      data: {
+        status: 'PENDING_ADMIN_ASSIGNMENT',
+        path: 'PATH_B',
+        ...(subjectId ? { subjectId } : {}),
+      },
     });
   }
 
@@ -320,15 +452,25 @@ export async function getMyRequestStatus(
   overrideStudentId?: string,
 ): Promise<any> {
   const studentId = callerRole === 'STUDENT' ? callerId : overrideStudentId || callerId;
+  // "In progress" excludes requests that are already resolved (MATCHED) or withdrawn.
   const matchReq = await prisma.matchRequest.findFirst({
-    where: { studentId, status: { not: 'CANCELLED' } },
+    where: { studentId, status: { notIn: ['CANCELLED', 'MATCHED'] } },
+    orderBy: { createdAt: 'desc' },
   });
 
   if (!matchReq) {
     throw new ApiError(404, 'No match request in progress');
   }
 
-  return { status: matchReq.status };
+  return {
+    id: matchReq.id,
+    subjectId: matchReq.subjectId,
+    format: matchReq.format,
+    path: matchReq.path,
+    status: matchReq.status,
+    zeroMatchSince: matchReq.zeroMatchSince ?? null,
+    resultingCohortId: matchReq.resultingCohortId ?? null,
+  };
 }
 
 export async function getTutorDetail(
@@ -336,7 +478,14 @@ export async function getTutorDetail(
   callerId: string,
   callerRole: string,
 ): Promise<any> {
-  const tutor = await prisma.tutorProfile.findUnique({ where: { id: tutorId } });
+  const tutor: any = await prisma.tutorProfile.findUnique({
+    where: { id: tutorId },
+    include: {
+      user: { select: { name: true } },
+      subjectRankings: { include: { subject: true }, orderBy: { rank: 'asc' } },
+      availabilitySlots: { orderBy: { startTime: 'asc' } },
+    },
+  });
   if (!tutor || tutor.verificationStatus !== 'VERIFIED') {
     throw new ApiError(404, 'Tutor not found');
   }
@@ -346,7 +495,24 @@ export async function getTutorDetail(
     where: { cohort: { tutorId } },
   });
 
-  return { ...tutor, uniqueStudentsTaught: uniqueStudents.length };
+  return {
+    tutorId: tutor.id,
+    name: tutorDisplayName(tutor.user?.name),
+    profilePictureUrl: tutor.profilePictureUrl ?? null,
+    verificationStatus: tutor.verificationStatus,
+    educationInstitution: tutor.educationInstitution ?? null,
+    // Optional fields are omitted when unset (06-api/03).
+    ...(tutor.degree ? { degree: tutor.degree } : {}),
+    // Tutors are not restricted by grade (TutorProfile has no grade column): Grades 1-12.
+    subjectsAndGrades: (tutor.subjectRankings ?? [])
+      .filter((r: any) => r.subject?.name)
+      .map((r: any) => ({ subjectName: r.subject.name, grades: '1-12' })),
+    uniqueStudentsTaught: uniqueStudents.length,
+    availableSlots: (tutor.availabilitySlots ?? []).map((slot: any) => ({
+      startTime: new Date(slot.startTime).toISOString(),
+      endTime: new Date(slot.endTime).toISOString(),
+    })),
+  };
 }
 
 export async function createMatchRequestForFormat(params: {

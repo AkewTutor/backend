@@ -19,19 +19,29 @@ import {
 } from '../../src/schemas/matching.schema.js';
 
 describe('searchTutorsQuerySchema', () => {
-  it('requires subjectId and grade', () => {
+  it('requires subjectId; grade is optional (it never filters tutors)', () => {
     const result = searchTutorsQuerySchema.safeParse({ query: {} });
 
     expect(result.success).toBe(false);
     if (!result.success) {
       const paths = result.error.issues.map((i) => i.path.join('.'));
-      expect(paths).toEqual(
-        expect.arrayContaining([
-          expect.stringContaining('subjectId'),
-          expect.stringContaining('grade'),
-        ]),
-      );
+      expect(paths).toEqual(expect.arrayContaining([expect.stringContaining('subjectId')]));
+      expect(paths.some((p) => p.includes('grade'))).toBe(false);
     }
+
+    const ok = searchTutorsQuerySchema.safeParse({
+      query: { subjectId: '11111111-1111-4111-8111-111111111111' },
+    });
+    expect(ok.success).toBe(true);
+  });
+
+  it('coerces the optional day filter and rejects values outside 0-6', () => {
+    const subjectId = '11111111-1111-4111-8111-111111111111';
+    const ok = searchTutorsQuerySchema.safeParse({ query: { subjectId, day: '2' } });
+    expect(ok.success && ok.data.query.day).toBe(2);
+    expect(searchTutorsQuerySchema.safeParse({ query: { subjectId, day: '7' } }).success).toBe(
+      false,
+    );
   });
 
   it('rejects grade outside 1-12', () => {

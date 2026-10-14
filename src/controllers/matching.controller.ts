@@ -67,12 +67,13 @@ export async function selectTutor(
   try {
     const user = req.user!;
     const callerId = await resolveCallerProfileId(user);
-    const { tutorId, studentId } = req.body;
+    const { tutorId, studentId, subjectId } = req.body;
     const result = await matchingService.selectTutor(
       callerId,
       user.role,
       studentId as string | undefined,
       tutorId as string,
+      subjectId as string | undefined,
     );
     res.status(201).json({ statusCode: 201, success: true, message: 'Created', data: result });
   } catch (error) {

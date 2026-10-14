@@ -309,6 +309,115 @@ describe('searchOneToOneTutors', () => {
   });
 });
 
+describe('searchOneToOneTutors — response shape and Path A request', () => {
+  beforeEach(() => resetAllMocks());
+
+  it('returns the documented card fields (name as "First L.", price) and nothing else', async () => {
+    (prisma.studentProfile.findUnique as any).mockResolvedValue(baseStudent());
+    (prisma.matchRequest.findFirst as any).mockResolvedValue(null);
+    (prisma.pricingConfig.findFirst as any).mockResolvedValue({
+      pricePerStudentPerHour: { toString: () => '350.00' },
+    });
+    (prisma.tutorProfile.findMany as any).mockResolvedValue([
+      baseTutor({
+        profilePictureUrl: null,
+        user: { name: 'Selam Tesfaye Bekele' },
+        availabilitySlots: [],
+      }),
+    ]);
+
+    const result = await searchOneToOneTutors(studentId, 'STUDENT', undefined, { subjectId });
+
+    expect(result.tutors).toEqual([
+      {
+        tutorId,
+        name: 'Selam B.',
+        profilePictureUrl: null,
+        verificationStatus: 'VERIFIED',
+        pricePerStudentPerHour: '350.00',
+      },
+    ]);
+  });
+
+  it('is read-only: searching never creates or updates a match request', async () => {
+    (prisma.studentProfile.findUnique as any).mockResolvedValue(baseStudent());
+    (prisma.matchRequest.findFirst as any).mockResolvedValue(null);
+    (prisma.tutorProfile.findMany as any).mockResolvedValue([]);
+
+    await searchOneToOneTutors(studentId, 'STUDENT', undefined, { subjectId });
+
+    expect(prisma.matchRequest.create).not.toHaveBeenCalled();
+    expect(prisma.matchRequest.update).not.toHaveBeenCalled();
+  });
+
+  it('with a learning-schedule preference, a tutor with no overlapping slot is excluded', async () => {
+    (prisma.studentProfile.findUnique as any).mockResolvedValue(
+      baseStudent({
+        learningSchedulePreference: [
+          { startTime: '2026-01-05T09:00:00Z', endTime: '2026-01-05T10:00:00Z' },
+        ],
+      }),
+    );
+    (prisma.tutorProfile.findMany as any).mockResolvedValue([
+      baseTutor({
+        id: 'overlaps',
+        availabilitySlots: [{ startTime: '2026-01-05T09:30:00Z', endTime: '2026-01-05T11:00:00Z' }],
+      }),
+      baseTutor({
+        id: 'no-overlap',
+        availabilitySlots: [{ startTime: '2026-01-06T09:00:00Z', endTime: '2026-01-06T10:00:00Z' }],
+      }),
+      baseTutor({ id: 'no-slots', availabilitySlots: [] }),
+    ]);
+
+    const result = await searchOneToOneTutors(studentId, 'STUDENT', undefined, { subjectId });
+
+    expect(result.tutors.map((t: any) => t.tutorId)).toEqual(['overlaps']);
+  });
+
+  it('day filter keeps only tutors with availability on that weekday', async () => {
+    (prisma.studentProfile.findUnique as any).mockResolvedValue(baseStudent());
+    (prisma.matchRequest.findFirst as any).mockResolvedValue(null);
+    (prisma.tutorProfile.findMany as any).mockResolvedValue([
+      baseTutor({
+        id: 'tutor-monday',
+        availabilitySlots: [
+          { dayOfWeek: 1, startTime: '2026-01-05T09:00:00Z', endTime: '2026-01-05T10:00:00Z' },
+        ],
+      }),
+      baseTutor({
+        id: 'tutor-tuesday',
+        availabilitySlots: [
+          { dayOfWeek: null, startTime: '2026-01-06T09:00:00Z', endTime: '2026-01-06T10:00:00Z' },
+        ],
+      }),
+    ]);
+
+    const result = await searchOneToOneTutors(studentId, 'STUDENT', undefined, {
+      subjectId,
+      day: 2,
+    });
+
+    expect(result.tutors.map((t: any) => t.tutorId)).toEqual(['tutor-tuesday']);
+  });
+
+  it('a budget below the 1-to-1 price excludes every tutor', async () => {
+    (prisma.studentProfile.findUnique as any).mockResolvedValue(baseStudent());
+    (prisma.matchRequest.findFirst as any).mockResolvedValue(null);
+    (prisma.pricingConfig.findFirst as any).mockResolvedValue({
+      pricePerStudentPerHour: { toString: () => '350.00' },
+    });
+    (prisma.tutorProfile.findMany as any).mockResolvedValue([baseTutor()]);
+
+    const result = await searchOneToOneTutors(studentId, 'STUDENT', undefined, {
+      subjectId,
+      budget: '300',
+    });
+
+    expect(result).toEqual({ tutors: [] });
+  });
+});
+
 describe('recommendTutorsWithMatchPercent', () => {
   beforeEach(() => resetAllMocks());
 
@@ -323,7 +432,9 @@ describe('recommendTutorsWithMatchPercent', () => {
       zeroMatchSince: null,
     });
 
-    const result = await recommendTutorsWithMatchPercent(studentId, 'STUDENT', undefined);
+    const result = await recommendTutorsWithMatchPercent(studentId, 'STUDENT', undefined, {
+      subjectId,
+    });
 
     expect(result.recommendations.find((r: any) => r.matchPercentage === 0)).toBeUndefined();
   });
@@ -345,7 +456,9 @@ describe('recommendTutorsWithMatchPercent', () => {
       zeroMatchSince: null,
     });
 
-    const result = await recommendTutorsWithMatchPercent(studentId, 'STUDENT', undefined);
+    const result = await recommendTutorsWithMatchPercent(studentId, 'STUDENT', undefined, {
+      subjectId,
+    });
 
     expect(result.recommendations[0].matchPercentage).toBe(100);
   });
@@ -363,7 +476,9 @@ describe('recommendTutorsWithMatchPercent', () => {
       zeroMatchSince: null,
     });
 
-    const result = await recommendTutorsWithMatchPercent(studentId, 'STUDENT', undefined);
+    const result = await recommendTutorsWithMatchPercent(studentId, 'STUDENT', undefined, {
+      subjectId,
+    });
 
     expect(result.recommendations[0].matchPercentage).toBe(88);
   });
@@ -381,7 +496,9 @@ describe('recommendTutorsWithMatchPercent', () => {
       zeroMatchSince: null,
     });
 
-    const result = await recommendTutorsWithMatchPercent(studentId, 'STUDENT', undefined);
+    const result = await recommendTutorsWithMatchPercent(studentId, 'STUDENT', undefined, {
+      subjectId,
+    });
 
     expect(result.recommendations[0].matchPercentage).toBe(79);
   });
@@ -399,7 +516,9 @@ describe('recommendTutorsWithMatchPercent', () => {
       zeroMatchSince: null,
     });
 
-    const result = await recommendTutorsWithMatchPercent(studentId, 'STUDENT', undefined);
+    const result = await recommendTutorsWithMatchPercent(studentId, 'STUDENT', undefined, {
+      subjectId,
+    });
 
     expect(result.recommendations[0].matchPercentage).toBe(100);
   });
@@ -432,7 +551,9 @@ describe('recommendTutorsWithMatchPercent', () => {
       zeroMatchSince: null,
     });
 
-    const result = await recommendTutorsWithMatchPercent(studentId, 'STUDENT', undefined);
+    const result = await recommendTutorsWithMatchPercent(studentId, 'STUDENT', undefined, {
+      subjectId,
+    });
 
     expect(result.recommendations[0].matchPercentage).toBe(88);
   });
@@ -460,7 +581,9 @@ describe('recommendTutorsWithMatchPercent', () => {
       zeroMatchSince: null,
     });
 
-    const result = await recommendTutorsWithMatchPercent(studentId, 'STUDENT', undefined);
+    const result = await recommendTutorsWithMatchPercent(studentId, 'STUDENT', undefined, {
+      subjectId,
+    });
 
     // This case pins the rounding rule; the exact overlap-window construction above
     // is illustrative of a ~78-scoring case per the worked example in 9-3 §9.3 —
@@ -481,7 +604,7 @@ describe('recommendTutorsWithMatchPercent', () => {
       zeroMatchSince: null,
     });
 
-    await recommendTutorsWithMatchPercent(studentId, 'STUDENT', undefined);
+    await recommendTutorsWithMatchPercent(studentId, 'STUDENT', undefined, { subjectId });
 
     expect(prisma.pricingConfig.findFirst).not.toHaveBeenCalled();
   });
@@ -511,7 +634,7 @@ describe('recommendTutorsWithMatchPercent', () => {
       zeroMatchSince: null,
     });
 
-    await recommendTutorsWithMatchPercent(studentId, 'STUDENT', undefined);
+    await recommendTutorsWithMatchPercent(studentId, 'STUDENT', undefined, { subjectId });
 
     expect(prisma.matchRequest.create).not.toHaveBeenCalled();
   });
@@ -526,7 +649,9 @@ describe('recommendTutorsWithMatchPercent', () => {
       zeroMatchSince,
     });
 
-    const result = await recommendTutorsWithMatchPercent(studentId, 'STUDENT', undefined);
+    const result = await recommendTutorsWithMatchPercent(studentId, 'STUDENT', undefined, {
+      subjectId,
+    });
 
     expect(result).toEqual({ recommendations: [], matchRequestId: 'existing-mr', zeroMatchSince });
   });
@@ -566,11 +691,15 @@ describe('recommendTutorsWithMatchPercent', () => {
 
     (prisma.studentProfile.findUnique as any).mockResolvedValueOnce(beforeTransition);
     (prisma.tutorProfile.findMany as any).mockResolvedValueOnce([tutorBefore]);
-    const before = await recommendTutorsWithMatchPercent(studentId, 'STUDENT', undefined);
+    const before = await recommendTutorsWithMatchPercent(studentId, 'STUDENT', undefined, {
+      subjectId,
+    });
 
     (prisma.studentProfile.findUnique as any).mockResolvedValueOnce(afterTransition);
     (prisma.tutorProfile.findMany as any).mockResolvedValueOnce([tutorAfter]);
-    const after = await recommendTutorsWithMatchPercent(studentId, 'STUDENT', undefined);
+    const after = await recommendTutorsWithMatchPercent(studentId, 'STUDENT', undefined, {
+      subjectId,
+    });
 
     expect(before.recommendations[0].matchPercentage).toBe(
       after.recommendations[0].matchPercentage,
@@ -601,12 +730,16 @@ describe('recommendTutorsWithMatchPercent', () => {
       process.env.TZ = 'UTC';
       (prisma.studentProfile.findUnique as any).mockResolvedValueOnce(student);
       (prisma.tutorProfile.findMany as any).mockResolvedValueOnce([tutor]);
-      const utcRun = await recommendTutorsWithMatchPercent(studentId, 'STUDENT', undefined);
+      const utcRun = await recommendTutorsWithMatchPercent(studentId, 'STUDENT', undefined, {
+        subjectId,
+      });
 
       process.env.TZ = 'Africa/Addis_Ababa';
       (prisma.studentProfile.findUnique as any).mockResolvedValueOnce(student);
       (prisma.tutorProfile.findMany as any).mockResolvedValueOnce([tutor]);
-      const addisRun = await recommendTutorsWithMatchPercent(studentId, 'STUDENT', undefined);
+      const addisRun = await recommendTutorsWithMatchPercent(studentId, 'STUDENT', undefined, {
+        subjectId,
+      });
 
       expect(utcRun.recommendations[0].matchPercentage).toBe(
         addisRun.recommendations[0].matchPercentage,
@@ -685,6 +818,175 @@ describe('injection.test.ts — [Phase 4, OWASP A03:2021] searchOneToOneTutors l
   });
 });
 
+describe('recommendTutorsWithMatchPercent — response shape', () => {
+  beforeEach(() => resetAllMocks());
+
+  it('returns only tutorId, display name, picture and matchPercentage per tutor', async () => {
+    (prisma.studentProfile.findUnique as any).mockResolvedValue(baseStudent());
+    (prisma.matchRequest.findFirst as any).mockResolvedValue({
+      id: 'mr-1',
+      status: 'SEARCHING',
+      zeroMatchSince: null,
+    });
+    (prisma.tutorProfile.findMany as any).mockResolvedValue([
+      baseTutor({ profilePictureUrl: 'https://img/x.png', user: { name: 'Selam Tesfaye' } }),
+    ]);
+
+    const result = await recommendTutorsWithMatchPercent(studentId, 'STUDENT', undefined, {
+      subjectId,
+    });
+
+    expect(Object.keys(result.recommendations[0]).sort()).toEqual([
+      'matchPercentage',
+      'name',
+      'profilePictureUrl',
+      'tutorId',
+    ]);
+    expect(result.recommendations[0]).toMatchObject({ tutorId, name: 'Selam T.' });
+  });
+});
+
+describe('recommendations use the same exact-match set as search', () => {
+  beforeEach(() => resetAllMocks());
+
+  it('a tutor ranking the subject 3rd is never listed (not scored 0)', async () => {
+    (prisma.studentProfile.findUnique as any).mockResolvedValue(baseStudent());
+    (prisma.matchRequest.findFirst as any).mockResolvedValue({
+      id: 'mr-1',
+      status: 'SEARCHING',
+      subjectId,
+      zeroMatchSince: null,
+    });
+    (prisma.tutorProfile.findMany as any).mockResolvedValue([]); // rank 1 and rank 2 queries
+
+    const result = await recommendTutorsWithMatchPercent(studentId, 'STUDENT', undefined, {
+      subjectId,
+    });
+
+    expect(result.recommendations).toEqual([]);
+    expect(prisma.tutorProfile.findMany).toHaveBeenCalledTimes(2);
+  });
+
+  it('rank 2 tutors are only recommended when nobody ranks the subject first', async () => {
+    (prisma.studentProfile.findUnique as any).mockResolvedValue(baseStudent());
+    (prisma.matchRequest.findFirst as any).mockResolvedValue({
+      id: 'mr-1',
+      status: 'SEARCHING',
+      subjectId,
+      zeroMatchSince: null,
+    });
+    (prisma.tutorProfile.findMany as any).mockResolvedValueOnce([
+      baseTutor({ id: 'primary', subjectRankings: [{ subjectId, rank: 1 }] }),
+    ]);
+
+    const result = await recommendTutorsWithMatchPercent(studentId, 'STUDENT', undefined, {
+      subjectId,
+    });
+
+    expect(result.recommendations.map((r: any) => r.tutorId)).toEqual(['primary']);
+    expect(prisma.tutorProfile.findMany).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('recommendTutorsWithMatchPercent — subject priority', () => {
+  beforeEach(() => resetAllMocks());
+
+  it('the student interests win over an open request for another subject', async () => {
+    (prisma.studentProfile.findUnique as any).mockResolvedValue(
+      baseStudent({ subjectsOfInterest: [subjectId] }),
+    );
+    (prisma.matchRequest.findFirst as any).mockResolvedValue({
+      id: 'stale',
+      status: 'SEARCHING',
+      subjectId: 'stale-subject',
+      zeroMatchSince: null,
+    });
+    (prisma.tutorProfile.findMany as any).mockResolvedValue([]);
+
+    await recommendTutorsWithMatchPercent(studentId, 'STUDENT', undefined);
+
+    const where = (prisma.tutorProfile.findMany as any).mock.calls[0][0].where;
+    expect(JSON.stringify(where)).toContain(subjectId);
+    expect(JSON.stringify(where)).not.toContain('stale-subject');
+  });
+
+  it('an explicit subjectId wins over both interests and the open request', async () => {
+    (prisma.studentProfile.findUnique as any).mockResolvedValue(
+      baseStudent({ subjectsOfInterest: ['interest-subject'] }),
+    );
+    (prisma.matchRequest.findFirst as any).mockResolvedValue({
+      id: 'mr',
+      status: 'SEARCHING',
+      subjectId: 'stale-subject',
+      zeroMatchSince: null,
+    });
+    (prisma.tutorProfile.findMany as any).mockResolvedValue([]);
+
+    await recommendTutorsWithMatchPercent(studentId, 'STUDENT', undefined, { subjectId });
+
+    const where = (prisma.tutorProfile.findMany as any).mock.calls[0][0].where;
+    expect(JSON.stringify(where)).toContain(subjectId);
+    expect(JSON.stringify(where)).not.toContain('interest-subject');
+  });
+
+  it('with no interests the open request subject is the fallback', async () => {
+    (prisma.studentProfile.findUnique as any).mockResolvedValue(
+      baseStudent({ subjectsOfInterest: [] }),
+    );
+    (prisma.matchRequest.findFirst as any).mockResolvedValue({
+      id: 'mr',
+      status: 'SEARCHING',
+      subjectId,
+      zeroMatchSince: null,
+    });
+    (prisma.tutorProfile.findMany as any).mockResolvedValue([]);
+
+    const result = await recommendTutorsWithMatchPercent(studentId, 'STUDENT', undefined);
+
+    expect(result.needsProfile).toBeUndefined();
+    expect(JSON.stringify((prisma.tutorProfile.findMany as any).mock.calls[0][0].where)).toContain(
+      subjectId,
+    );
+  });
+});
+
+describe('recommendTutorsWithMatchPercent — profile not ready', () => {
+  beforeEach(() => resetAllMocks());
+
+  it('no subject, no open request and no interests: asks for the profile, lists nobody', async () => {
+    (prisma.studentProfile.findUnique as any).mockResolvedValue(
+      baseStudent({ subjectsOfInterest: [] }),
+    );
+    (prisma.matchRequest.findFirst as any).mockResolvedValue(null);
+
+    const result = await recommendTutorsWithMatchPercent(studentId, 'STUDENT', undefined);
+
+    expect(result).toEqual({
+      matchRequestId: null,
+      zeroMatchSince: null,
+      recommendations: [],
+      needsProfile: true,
+    });
+    expect(prisma.tutorProfile.findMany).not.toHaveBeenCalled();
+    expect(prisma.matchRequest.create).not.toHaveBeenCalled();
+  });
+
+  it('with subjects of interest and no explicit subject it matches on those subjects', async () => {
+    (prisma.studentProfile.findUnique as any).mockResolvedValue(
+      baseStudent({ subjectsOfInterest: [subjectId] }),
+    );
+    (prisma.matchRequest.findFirst as any).mockResolvedValue(null);
+    (prisma.tutorProfile.findMany as any).mockResolvedValue([
+      baseTutor({ subjectRankings: [{ subjectId, rank: 1 }] }),
+    ]);
+
+    const result = await recommendTutorsWithMatchPercent(studentId, 'STUDENT', undefined);
+
+    expect(result.needsProfile).toBeUndefined();
+    expect(result.recommendations).toHaveLength(1);
+  });
+});
+
 describe('selectTutor', () => {
   beforeEach(() => {
     (prisma.tutorProfile.findUnique as any).mockResolvedValue({
@@ -705,16 +1007,89 @@ describe('selectTutor', () => {
       tutorId,
     });
 
-    const result = await selectTutor(studentId, 'STUDENT', undefined, tutorId);
+    const result = await selectTutor(studentId, 'STUDENT', undefined, tutorId, subjectId);
 
     expect(result).toEqual({ cohortId: 'cohort-1', status: 'PENDING_ADMIN_APPROVAL', tutorId });
   });
 
+  it('uses the subjectId sent by the client when there is no open request', async () => {
+    (prisma.tutorExclusion.findUnique as any).mockResolvedValue(null);
+    (prisma.matchRequest.findFirst as any).mockResolvedValue(null);
+    (cohortService.createOneToOneCohort as any).mockResolvedValue({
+      cohortId: 'cohort-1',
+      status: 'PENDING_ADMIN_APPROVAL',
+      tutorId,
+    });
+
+    await selectTutor(studentId, 'STUDENT', undefined, tutorId, subjectId);
+
+    expect(cohortService.createOneToOneCohort).toHaveBeenCalledWith(
+      studentId,
+      tutorId,
+      expect.anything(),
+      subjectId,
+    );
+  });
+
+  it('400 "Choose a subject first" when no subject can be resolved', async () => {
+    (prisma.tutorExclusion.findUnique as any).mockResolvedValue(null);
+    (prisma.matchRequest.findFirst as any).mockResolvedValue(null);
+    (prisma.studentProfile.findUnique as any).mockResolvedValue(
+      baseStudent({ subjectsOfInterest: [] }),
+    );
+
+    await expect(selectTutor(studentId, 'STUDENT', undefined, tutorId)).rejects.toMatchObject({
+      statusCode: 400,
+      message: 'Choose a subject first',
+    });
+    expect(cohortService.createOneToOneCohort).not.toHaveBeenCalled();
+  });
+
   it('requires a subjectId when there is no search in progress (400)', async () => {
     (prisma.matchRequest.findFirst as any).mockResolvedValue(null);
+    (prisma.studentProfile.findUnique as any).mockResolvedValue(
+      baseStudent({ subjectsOfInterest: [] }),
+    );
 
     await expect(triggerNoExactMatch(studentId, 'STUDENT', undefined)).rejects.toMatchObject({
       statusCode: 400,
+    });
+  });
+
+  it('no-exact-match with no request falls back to the first subject of interest', async () => {
+    (prisma.matchRequest.findFirst as any).mockResolvedValue(null);
+    (prisma.studentProfile.findUnique as any).mockResolvedValue(
+      baseStudent({ subjectsOfInterest: [subjectId, 'other-subject'] }),
+    );
+    (prisma.matchRequest.create as any).mockResolvedValue({
+      id: 'mr-new',
+      status: 'PENDING_ADMIN_ASSIGNMENT',
+    });
+
+    const result = await triggerNoExactMatch(studentId, 'STUDENT', undefined);
+
+    expect(prisma.matchRequest.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ subjectId, path: 'PATH_B' }),
+    });
+    expect(result).toEqual({ matchRequestId: 'mr-new', status: 'PENDING_ADMIN_ASSIGNMENT' });
+  });
+
+  it('no-exact-match re-points a reused request at the subject sent by the client', async () => {
+    (prisma.matchRequest.findFirst as any).mockResolvedValue({
+      id: 'mr-1',
+      status: 'SEARCHING',
+      subjectId: 'old-subject',
+    });
+    (prisma.matchRequest.update as any).mockResolvedValue({
+      id: 'mr-1',
+      status: 'PENDING_ADMIN_ASSIGNMENT',
+    });
+
+    await triggerNoExactMatch(studentId, 'STUDENT', undefined, subjectId);
+
+    expect(prisma.matchRequest.update).toHaveBeenCalledWith({
+      where: { id: 'mr-1' },
+      data: { status: 'PENDING_ADMIN_ASSIGNMENT', path: 'PATH_B', subjectId },
     });
   });
 
@@ -765,6 +1140,33 @@ describe('selectTutor', () => {
     });
   });
 
+  it("resolves the student's own Path A search: cohort uses its subject and the request becomes MATCHED", async () => {
+    (prisma.tutorExclusion.findUnique as any).mockResolvedValue(null);
+    // 1st findFirst = blocking requests (none); 2nd = the student's PATH_A SEARCHING request.
+    (prisma.matchRequest.findFirst as any)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: 'mr-a', subjectId, status: 'SEARCHING', path: 'PATH_A' });
+    (prisma.cohort.findFirst as any).mockResolvedValue(null);
+    (cohortService.createOneToOneCohort as any).mockResolvedValue({
+      cohortId: 'cohort-1',
+      status: 'PENDING_ADMIN_APPROVAL',
+      tutorId,
+    });
+
+    await selectTutor(studentId, 'STUDENT', undefined, tutorId);
+
+    expect(cohortService.createOneToOneCohort).toHaveBeenCalledWith(
+      studentId,
+      tutorId,
+      expect.anything(),
+      subjectId,
+    );
+    expect(prisma.matchRequest.update).toHaveBeenCalledWith({
+      where: { id: 'mr-a' },
+      data: { status: 'MATCHED', tutorId, resultingCohortId: 'cohort-1' },
+    });
+  });
+
   it('delegates cohort creation, does not duplicate it', async () => {
     (prisma.tutorExclusion.findUnique as any).mockResolvedValue(null);
     (prisma.matchRequest.findFirst as any).mockResolvedValue(null);
@@ -775,7 +1177,7 @@ describe('selectTutor', () => {
       tutorId,
     });
 
-    await selectTutor(studentId, 'STUDENT', undefined, tutorId);
+    await selectTutor(studentId, 'STUDENT', undefined, tutorId, subjectId);
 
     expect(cohortService.createOneToOneCohort).toHaveBeenCalledTimes(1);
   });
@@ -953,5 +1355,61 @@ describe('Status read path (getMyRequestStatus / getTutorDetail)', () => {
     const result = await getTutorDetail(tutorId, studentId, 'STUDENT');
 
     expect(result.uniqueStudentsTaught).toBe(3);
+  });
+
+  it('getMyRequestStatus returns the documented request shape', async () => {
+    (prisma.matchRequest.findFirst as any).mockResolvedValue({
+      id: 'mr-1',
+      subjectId,
+      format: 'ONE_TO_ONE',
+      path: 'PATH_A',
+      status: 'SEARCHING',
+      zeroMatchSince: null,
+      resultingCohortId: null,
+      studentId,
+    });
+
+    const { getMyRequestStatus } = await import('../../src/services/matching.service.js');
+    const result = await getMyRequestStatus(studentId, 'STUDENT', undefined);
+
+    expect(result).toEqual({
+      id: 'mr-1',
+      subjectId,
+      format: 'ONE_TO_ONE',
+      path: 'PATH_A',
+      status: 'SEARCHING',
+      zeroMatchSince: null,
+      resultingCohortId: null,
+    });
+  });
+
+  it('getTutorDetail returns the documented profile shape', async () => {
+    (prisma.tutorProfile.findUnique as any).mockResolvedValue(
+      baseTutor({
+        profilePictureUrl: null,
+        educationInstitution: 'Addis Ababa University',
+        degree: null,
+        user: { name: 'Selam Tesfaye' },
+        subjectRankings: [{ subjectId, rank: 1, subject: { name: 'Mathematics' } }],
+        availabilitySlots: [{ startTime: '2026-09-08T16:00:00Z', endTime: '2026-09-08T17:00:00Z' }],
+      }),
+    );
+    (prisma.cohortMembership.groupBy as any).mockResolvedValue([{ studentId: 'a' }]);
+
+    const { getTutorDetail } = await import('../../src/services/matching.service.js');
+    const result = await getTutorDetail(tutorId, studentId, 'STUDENT');
+
+    expect(result).toEqual({
+      tutorId,
+      name: 'Selam T.',
+      profilePictureUrl: null,
+      verificationStatus: 'VERIFIED',
+      educationInstitution: 'Addis Ababa University',
+      subjectsAndGrades: [{ subjectName: 'Mathematics', grades: '1-12' }],
+      uniqueStudentsTaught: 1,
+      availableSlots: [
+        { startTime: '2026-09-08T16:00:00.000Z', endTime: '2026-09-08T17:00:00.000Z' },
+      ],
+    });
   });
 });
