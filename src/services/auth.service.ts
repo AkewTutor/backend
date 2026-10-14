@@ -393,6 +393,12 @@ export async function login(
     throw invalidCredentialsError();
   }
 
+  // Admin-suspended accounts cannot sign in. Checked after the password so a
+  // wrong password still gets the generic 401 (no account enumeration).
+  if (user.status === 'SUSPENDED') {
+    throw new ApiError(403, 'This account has been suspended. Please contact support.');
+  }
+
   const verified = user.email === identifier ? user.emailVerifiedAt : user.phoneVerifiedAt;
   if (!verified) {
     await resendVerification(user.id).catch(() => undefined);
@@ -496,6 +502,10 @@ export async function refreshAccessToken(
   // userId, so the role must come from the user row.
   const user = await prisma.user.findFirst({ where: { id: stored.userId } });
   if (!user) {
+    throw invalidSessionError();
+  }
+
+  if (user.status === 'SUSPENDED') {
     throw invalidSessionError();
   }
 
