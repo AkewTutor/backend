@@ -138,6 +138,7 @@ describe('listPendingApprovals', () => {
         id: 'c1',
         format: 'ONE_TO_THREE',
         tutorId: 't1',
+        tutor: { user: { email: 't4@test.local' } },
         createdAt: new Date('2026-01-01'),
         adminOverdueNotifiedAt: null,
         studentDelayNotifiedAt: null,
@@ -158,9 +159,11 @@ describe('listPendingApprovals', () => {
       cohortId: 'c1',
       path: 'PATH_C',
       studentIds: ['s1', 's2'],
+      tutorEmail: 't4@test.local',
       isOverdue: false,
     });
     expect(result.queue[0]).not.toHaveProperty('memberships');
+    expect(result.queue[0]).not.toHaveProperty('tutor');
   });
 
   it('this function never computes staleness itself — reads isOverdue as stored', async () => {
