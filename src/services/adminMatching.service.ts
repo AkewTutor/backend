@@ -8,18 +8,35 @@ export async function listPendingApprovals(
   page: number,
   limit: number,
 ): Promise<any> {
-  const where: any = {};
-  if (overdueOnly) where.isOverdue = true; // wait, test uses mock that returns isOverdue.
-  if (path) where.path = path;
+  // Only cohorts that are actually waiting on an admin belong in the queue.
+  const where: any = { status: 'PENDING_ADMIN_APPROVAL' };
+  if (overdueOnly) where.adminOverdueNotifiedAt = { not: null };
+  // Cohort has no `path` column: Path A is 1-to-1, Path C is any group format.
+  if (path === 'PATH_A') where.format = 'ONE_TO_ONE';
+  else if (path === 'PATH_C') where.format = { not: 'ONE_TO_ONE' };
+  else if (path) where.id = { in: [] };
 
-  // The test specifically says the service does not compute staleness itself.
-  const queue = await (prisma as any).cohort.findMany({ where });
-  queue.sort((a: any, b: any) => {
+  const rows = await (prisma as any).cohort.findMany({ where, include: { memberships: true } });
+
+  // Reads the stored overdue flag; never computes staleness itself.
+  const items = rows.map((row: any) => {
+    const { memberships, ...rest } = row;
+    return {
+      ...rest,
+      cohortId: row.cohortId ?? row.id,
+      path: row.path ?? (row.format === 'ONE_TO_ONE' ? 'PATH_A' : 'PATH_C'),
+      studentIds: row.studentIds ?? (memberships ?? []).map((m: any) => m.studentId),
+      isOverdue: row.isOverdue ?? row.adminOverdueNotifiedAt != null,
+    };
+  });
+  items.sort((a: any, b: any) => {
     if (a.isOverdue && !b.isOverdue) return -1;
     if (!a.isOverdue && b.isOverdue) return 1;
     return (a.createdAt || 0) < (b.createdAt || 0) ? -1 : 1;
   });
-  return { queue };
+
+  const start = (page - 1) * limit;
+  return { queue: items.slice(start, start + limit), page, limit, total: items.length };
 }
 
 export async function approveBooking(cohortId: string, adminId: string): Promise<any> {
