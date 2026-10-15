@@ -278,7 +278,11 @@ export async function getMyCohort(
   const studentId = callerRole === 'STUDENT' ? callerId : overrides?.studentId || callerId;
   const memberships = await prisma.cohortMembership.findMany({
     where: { studentId },
-    include: { cohort: true },
+    include: {
+      cohort: {
+        include: { _count: { select: { memberships: { where: { status: { not: 'ENDED' } } } } } },
+      },
+    },
   });
   // 06-api/03 shape + cohortMembershipId (needed by /assessments).
   return {
@@ -289,6 +293,7 @@ export async function getMyCohort(
       status: m.cohort?.status,
       targetGroupSize: m.cohort?.targetGroupSize ?? null,
       groupFormationWindowExpiresAt: m.cohort?.groupFormationWindowExpiresAt ?? null,
+      memberCount: m.cohort?._count?.memberships ?? 0,
       membershipStatus: m.status,
     })),
   };
