@@ -23,6 +23,7 @@ vi.mock('../../src/config/db.js', () => {
       create: vi.fn(),
       update: vi.fn(),
       updateMany: vi.fn(),
+      _count: { memberships: 2 },
     },
     cohortMembership: {
       findMany: vi.fn(),
@@ -503,6 +504,7 @@ describe('getMyCohort / getCohortMembers', () => {
       status: 'FORMING',
       targetGroupSize: 3,
       groupFormationWindowExpiresAt: null,
+      memberCount: 2,
       membershipStatus: 'PENDING_PAYMENT',
     });
   });
