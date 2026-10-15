@@ -68,6 +68,7 @@ import {
   listUsers,
   manageRelationshipRecords,
   suspendAccount,
+  reactivateAccount,
 } from '../../src/services/adminPeople.service.js';
 
 function resetAllMocks() {
@@ -264,6 +265,43 @@ describe('suspendAccount / restrictAccount', () => {
 
     expect(recordAuditLog).toHaveBeenCalledWith(
       expect.objectContaining({ actor: 'admin-1', action: 'ACCOUNT_SUSPENDED', target: 'user-1' }),
+    );
+  });
+});
+
+describe('reactivateAccount', () => {
+  beforeEach(() => resetAllMocks());
+
+  it('sets the user status back to ACTIVE and resolves { userId, status }', async () => {
+    const result = await reactivateAccount('user-1', 'admin-1');
+
+    expect(prisma.user.update).toHaveBeenCalledWith({
+      where: { id: 'user-1' },
+      data: { status: 'ACTIVE' },
+    });
+    expect(result).toEqual({ userId: 'user-1', status: 'ACTIVE' });
+  });
+
+  it('unknown user throws ApiError(404) and updates nothing', async () => {
+    (prisma.user.findUnique as any).mockResolvedValue(null);
+
+    await expect(reactivateAccount('missing', 'admin-1')).rejects.toMatchObject({
+      statusCode: 404,
+      message: 'User not found',
+    });
+    expect(prisma.user.update).not.toHaveBeenCalled();
+    expect(recordAuditLog).not.toHaveBeenCalled();
+  });
+
+  it('is audit-logged as ACCOUNT_REACTIVATED with the acting admin and target', async () => {
+    await reactivateAccount('user-1', 'admin-1');
+
+    expect(recordAuditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actor: 'admin-1',
+        action: 'ACCOUNT_REACTIVATED',
+        target: 'user-1',
+      }),
     );
   });
 });

@@ -13,6 +13,7 @@ vi.mock('../../src/services/adminPeople.service.js', () => ({
   listUsers: vi.fn(),
   manageRelationshipRecords: vi.fn(),
   suspendAccount: vi.fn(),
+  reactivateAccount: vi.fn(),
 }));
 
 vi.mock('../../src/utils/jwt.js', () => ({
@@ -38,12 +39,17 @@ describe('adminPeople.routes.ts', () => {
     });
     (adminPeopleService.manageRelationshipRecords as any).mockResolvedValue({ id: 'rel-1' });
     (adminPeopleService.suspendAccount as any).mockResolvedValue({ id: 'user-1' });
+    (adminPeopleService.reactivateAccount as any).mockResolvedValue({
+      userId: 'user-1',
+      status: 'ACTIVE',
+    });
   });
 
   it.each([
     ['get', '/api/v1/admin/people'],
     ['patch', '/api/v1/admin/people/relationships/rel-1'],
     ['post', '/api/v1/admin/people/user-1/suspend'],
+    ['post', '/api/v1/admin/people/user-1/reactivate'],
   ])('%s %s requires Admin — 401 with no header', async (method, path) => {
     const res = await (request(app) as any)[method](path).send({});
 
@@ -54,6 +60,7 @@ describe('adminPeople.routes.ts', () => {
     ['get', '/api/v1/admin/people'],
     ['patch', '/api/v1/admin/people/relationships/rel-1'],
     ['post', '/api/v1/admin/people/user-1/suspend'],
+    ['post', '/api/v1/admin/people/user-1/reactivate'],
   ])('%s %s requires Admin — 403 with a Parent token', async (method, path) => {
     const res = await (request(app) as any)
       [method](path)
@@ -70,5 +77,15 @@ describe('adminPeople.routes.ts', () => {
       .send({ reason: 'Policy violation', restrictionType: 'SUSPENDED' });
 
     expect(res.status).toBe(200);
+  });
+
+  it('POST /admin/people/:userId/reactivate succeeds with an Admin token', async () => {
+    const res = await request(app)
+      .post('/api/v1/admin/people/user-1/reactivate')
+      .set('Authorization', 'Bearer admin-token')
+      .send({});
+
+    expect(res.status).toBe(200);
+    expect(adminPeopleService.reactivateAccount).toHaveBeenCalledWith('user-1', 'admin-1');
   });
 });

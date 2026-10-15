@@ -12,11 +12,14 @@ vi.mock('../../src/services/adminPeople.service.js', () => ({
   listUsers: vi.fn(),
   manageRelationshipRecords: vi.fn(),
   suspendAccount: vi.fn(),
+  reactivateAccount: vi.fn(),
 }));
 
 import * as adminPeopleService from '../../src/services/adminPeople.service.js';
-import { suspendAccount as suspendAccountController } from '../../src/controllers/adminPeople.controller.js';
-
+import {
+  suspendAccount as suspendAccountController,
+  reactivateAccount as reactivateAccountController,
+} from '../../src/controllers/adminPeople.controller.js';
 function mockReq(overrides: Partial<Request> = {}): Request {
   return { body: {}, params: {}, query: {}, ...overrides } as unknown as Request;
 }
@@ -48,6 +51,27 @@ describe('adminPeople.controller.ts', () => {
       'admin-1',
       'Policy violation',
       'SUSPENDED',
+    );
+  });
+
+  it('reactivateAccount passes (req.params.userId, req.user.id) and responds 200 with the result', async () => {
+    (adminPeopleService.reactivateAccount as any).mockResolvedValue({
+      userId: 'user-1',
+      status: 'ACTIVE',
+    });
+    const req = mockReq({
+      user: { id: 'admin-1', role: 'ADMIN' },
+      params: { userId: 'user-1' },
+    } as any);
+    const res = mockRes();
+
+    await reactivateAccountController(req, res, vi.fn());
+    await new Promise((r) => setImmediate(r));
+
+    expect(adminPeopleService.reactivateAccount).toHaveBeenCalledWith('user-1', 'admin-1');
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { userId: 'user-1', status: 'ACTIVE' } }),
     );
   });
 });

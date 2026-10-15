@@ -329,6 +329,28 @@ describe('login', () => {
     expect(prisma.refreshToken.create).not.toHaveBeenCalled();
   });
 
+  it('correct password but SUSPENDED account → 403 with the suspended message, no tokens issued', async () => {
+    (prisma.user.findFirst as any).mockResolvedValue({ ...activeUser, status: 'SUSPENDED' });
+    (comparePassword as any).mockResolvedValue(true);
+
+    await expect(login('stu@example.com', 'correctpassword')).rejects.toMatchObject({
+      statusCode: 403,
+      message: 'This account has been suspended. Please contact support.',
+    });
+    expect(prisma.refreshToken.create).not.toHaveBeenCalled();
+  });
+
+  it('wrong password on a SUSPENDED account → still the generic 401 (no account leak)', async () => {
+    (prisma.user.findFirst as any).mockResolvedValue({ ...activeUser, status: 'SUSPENDED' });
+    (comparePassword as any).mockResolvedValue(false);
+    (prisma.user.update as any).mockResolvedValue({ ...activeUser, failedLoginCount: 1 });
+
+    await expect(login('stu@example.com', 'wrongpassword')).rejects.toMatchObject({
+      statusCode: 401,
+      message: 'Invalid email/phone or password',
+    });
+  });
+
   it('wrong password on an unverified account → still the generic 401 (no account leak)', async () => {
     (prisma.user.findFirst as any).mockResolvedValue({
       ...activeUser,
@@ -641,6 +663,29 @@ describe('login / refreshAccessToken / logout / logoutAll (refresh-token flow)',
 
     expect(result.accessToken).toBeDefined();
     expect(result.refreshToken).toBeDefined();
+  });
+
+  it('refresh for a SUSPENDED user throws ApiError(401) and issues no new token', async () => {
+    (prisma.refreshToken.findUnique as any).mockResolvedValue({
+      id: 'rt-old',
+      userId: 'user-1',
+      familyId: 'fam-1',
+      revokedAt: null,
+      expiresAt: new Date(Date.now() + 1000 * 60 * 60),
+    });
+    (prisma.refreshToken.updateMany as any).mockResolvedValue({ count: 1 });
+    (prisma.user.findFirst as any).mockResolvedValue({
+      id: 'user-1',
+      role: 'STUDENT',
+      status: 'SUSPENDED',
+    });
+
+    await expect(refreshAccessToken('raw-old-token')).rejects.toMatchObject({
+      statusCode: 401,
+      message: 'Session expired — please log in again',
+    });
+    expect(prisma.refreshToken.create).not.toHaveBeenCalled();
+    expect(signAccessToken).not.toHaveBeenCalled();
   });
 
   it('refresh with an expired token throws ApiError(401, "Session expired — please log in again")', async () => {
