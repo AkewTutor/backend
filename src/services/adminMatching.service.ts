@@ -16,15 +16,22 @@ export async function listPendingApprovals(
   else if (path === 'PATH_C') where.format = { not: 'ONE_TO_ONE' };
   else if (path) where.id = { in: [] };
 
-  const rows = await (prisma as any).cohort.findMany({ where, include: { memberships: true } });
+  const rows = await (prisma as any).cohort.findMany({
+    where,
+    include: {
+      memberships: true,
+      tutor: { include: { user: { select: { email: true } } } },
+    },
+  });
 
   // Reads the stored overdue flag; never computes staleness itself.
   const items = rows.map((row: any) => {
-    const { memberships, ...rest } = row;
+    const { memberships, tutor, ...rest } = row;
     return {
       ...rest,
       cohortId: row.cohortId ?? row.id,
       path: row.path ?? (row.format === 'ONE_TO_ONE' ? 'PATH_A' : 'PATH_C'),
+      tutorEmail: row.tutorEmail ?? tutor?.user?.email ?? null,
       studentIds: row.studentIds ?? (memberships ?? []).map((m: any) => m.studentId),
       isOverdue: row.isOverdue ?? row.adminOverdueNotifiedAt != null,
     };
