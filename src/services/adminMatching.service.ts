@@ -119,7 +119,7 @@ export async function manuallyAssembleGroup(
     throw new ApiError(400, 'Selected tutor is not eligible for this assignment');
   }
 
-  return await prisma.$transaction(async (tx) => {
+  const assigned = await prisma.$transaction(async (tx) => {
     const claim = await tx.matchRequest.updateMany({
       where: { id: { in: matchRequestIds }, status: 'PENDING_ADMIN_ASSIGNMENT' },
       data: { status: 'MATCHED' },
@@ -147,6 +147,48 @@ export async function manuallyAssembleGroup(
       })),
     });
 
-    return { cohortId: cohort.id, status: cohort.status, studentIds: reqs.map((r) => r.studentId) };
+    return {
+      cohortId: cohort.id,
+      status: cohort.status,
+      tutorId,
+      studentIds: reqs.map((r) => r.studentId),
+    };
   });
+
+  // The assignment is the admin's approval, so each student hears about it right away.
+  for (const request of reqs) {
+    const student = await prisma.studentProfile.findUnique({ where: { id: request.studentId } });
+    if (student?.userId) {
+      await dispatchNotification(student.userId, 'MATCH_FOUND', { cohortId: assigned.cohortId });
+    }
+  }
+  return assigned;
+}
+
+// The admin page picks people (user ids); the API works on tutor/student profile ids and the
+// students' waiting requests. Accepts either id kind and resolves them.
+export async function resolveManualAssignInput(
+  studentIds: string[],
+  tutorId: string,
+): Promise<{ tutorId: string; matchRequestIds: string[] }> {
+  const tutor = await prisma.tutorProfile.findFirst({
+    where: { OR: [{ id: tutorId }, { userId: tutorId }] },
+  });
+  if (!tutor) {
+    throw new ApiError(400, 'Selected tutor is not eligible for this assignment');
+  }
+
+  const students = await prisma.studentProfile.findMany({
+    where: { OR: [{ id: { in: studentIds } }, { userId: { in: studentIds } }] },
+  });
+  const requests = await prisma.matchRequest.findMany({
+    where: {
+      studentId: { in: students.map((s) => s.id) },
+      status: 'PENDING_ADMIN_ASSIGNMENT',
+    },
+  });
+  if (requests.length === 0) {
+    throw new ApiError(400, 'The selected students have no request waiting for assignment');
+  }
+  return { tutorId: tutor.id, matchRequestIds: requests.map((r) => r.id) };
 }
