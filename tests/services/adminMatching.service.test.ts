@@ -203,6 +203,24 @@ describe('approveBooking / rejectBooking', () => {
     });
   });
 
+  it('approve notifies every member of the cohort with MATCH_FOUND', async () => {
+    (prisma.cohort.findUnique as any).mockResolvedValue({
+      id: cohortId,
+      status: 'PENDING_ADMIN_APPROVAL',
+      memberships: [{ studentId: 's1' }, { studentId: 's2' }],
+    });
+    (prisma.cohort.update as any).mockResolvedValue({ id: cohortId, status: 'PENDING_PAYMENT' });
+    (prisma.studentProfile.findUnique as any)
+      .mockResolvedValueOnce({ userId: 'u1' })
+      .mockResolvedValueOnce({ userId: 'u2' });
+
+    await approveBooking(cohortId, adminId);
+
+    expect(dispatchNotification).toHaveBeenCalledTimes(2);
+    expect(dispatchNotification).toHaveBeenCalledWith('u1', 'MATCH_FOUND', { cohortId });
+    expect(dispatchNotification).toHaveBeenCalledWith('u2', 'MATCH_FOUND', { cohortId });
+  });
+
   it('approve does not itself confirm the schedule — no session-generation call from here', async () => {
     (prisma.cohort.findUnique as any).mockResolvedValue({
       id: cohortId,
