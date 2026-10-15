@@ -53,9 +53,21 @@ export async function manualAssign(
 ): Promise<void> {
   try {
     const adminId = req.user!.id;
-    const { matchRequestId, matchRequestIds: idsFromBody, tutorId } = req.body ?? {};
+    const { matchRequestId, matchRequestIds: idsFromBody, studentIds, ...rest } = req.body ?? {};
+    let tutorId: string | undefined = rest.tutorId;
     // Accept either a single matchRequestId or a matchRequestIds array
-    const matchRequestIds: string[] = idsFromBody ?? (matchRequestId ? [matchRequestId] : []);
+    let matchRequestIds: string[] = idsFromBody ?? (matchRequestId ? [matchRequestId] : []);
+    // The admin page sends people (studentIds + tutor user id); resolve them to waiting requests.
+    if (
+      matchRequestIds.length === 0 &&
+      Array.isArray(studentIds) &&
+      studentIds.length > 0 &&
+      tutorId
+    ) {
+      const resolved = await adminMatchingService.resolveManualAssignInput(studentIds, tutorId);
+      matchRequestIds = resolved.matchRequestIds;
+      tutorId = resolved.tutorId;
+    }
     if (matchRequestIds.length === 0 || !tutorId) {
       throw new ApiError(400, 'matchRequestId(s) and tutorId are required');
     }
