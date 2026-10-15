@@ -1,6 +1,7 @@
 import { prisma } from '../config/db.js';
 import ApiError from '../utils/ApiError.js';
 import * as cohortService from './cohort.service.js';
+import { dispatchNotification } from './notification.service.js';
 
 export async function listPendingApprovals(
   overdueOnly: boolean,
@@ -47,7 +48,10 @@ export async function listPendingApprovals(
 }
 
 export async function approveBooking(cohortId: string, adminId: string): Promise<any> {
-  const cohort = await prisma.cohort.findUnique({ where: { id: cohortId } });
+  const cohort: any = await prisma.cohort.findUnique({
+    where: { id: cohortId },
+    include: { memberships: true },
+  });
   if (!cohort || cohort.status !== 'PENDING_ADMIN_APPROVAL') {
     throw new ApiError(409, 'This case is not awaiting approval');
   }
@@ -56,6 +60,14 @@ export async function approveBooking(cohortId: string, adminId: string): Promise
     where: { id: cohortId },
     data: { status: 'PENDING_PAYMENT', adminApprovedById: adminId },
   });
+
+  // Tell every member their match was approved and payment is next.
+  for (const membership of cohort.memberships ?? []) {
+    const student = await prisma.studentProfile.findUnique({ where: { id: membership.studentId } });
+    if (student?.userId) {
+      await dispatchNotification(student.userId, 'MATCH_FOUND', { cohortId });
+    }
+  }
   return result;
 }
 
