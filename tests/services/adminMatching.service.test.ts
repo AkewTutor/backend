@@ -132,6 +132,37 @@ describe('listPendingApprovals', () => {
     expect(result.queue.every((item: any) => item.path === 'PATH_C')).toBe(true);
   });
 
+  it('queries only PENDING_ADMIN_APPROVAL cohorts and maps rows to the queue item shape', async () => {
+    const findManySpy = vi.fn().mockResolvedValue([
+      {
+        id: 'c1',
+        format: 'ONE_TO_THREE',
+        tutorId: 't1',
+        createdAt: new Date('2026-01-01'),
+        adminOverdueNotifiedAt: null,
+        studentDelayNotifiedAt: null,
+        memberships: [{ studentId: 's1' }, { studentId: 's2' }],
+      },
+    ]);
+    (prisma as any).cohort.findMany = findManySpy;
+
+    const result = await listPendingApprovals(false, undefined, 1, 20);
+
+    expect(findManySpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ status: 'PENDING_ADMIN_APPROVAL' }),
+      }),
+    );
+    expect(result).toMatchObject({ page: 1, limit: 20, total: 1 });
+    expect(result.queue[0]).toMatchObject({
+      cohortId: 'c1',
+      path: 'PATH_C',
+      studentIds: ['s1', 's2'],
+      isOverdue: false,
+    });
+    expect(result.queue[0]).not.toHaveProperty('memberships');
+  });
+
   it('this function never computes staleness itself — reads isOverdue as stored', async () => {
     const findManySpy = vi
       .fn()
