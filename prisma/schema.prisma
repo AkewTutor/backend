@@ -66,6 +66,7 @@ enum NotificationType {
   PLATFORM_ANNOUNCEMENT
   NEW_MESSAGE
   ADMIN_REVIEW_REQUIRED
+  FORMAT_SWITCH
 }
 
 enum PolicyType {
