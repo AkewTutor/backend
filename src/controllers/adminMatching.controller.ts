@@ -53,7 +53,13 @@ export async function manualAssign(
 ): Promise<void> {
   try {
     const adminId = req.user!.id;
-    const { matchRequestId, matchRequestIds: idsFromBody, studentIds, ...rest } = req.body ?? {};
+    const {
+      matchRequestId,
+      matchRequestIds: idsFromBody,
+      studentIds,
+      subjectId,
+      ...rest
+    } = req.body ?? {};
     let tutorId: string | undefined = rest.tutorId;
     // Accept either a single matchRequestId or a matchRequestIds array
     let matchRequestIds: string[] = idsFromBody ?? (matchRequestId ? [matchRequestId] : []);
@@ -64,7 +70,11 @@ export async function manualAssign(
       studentIds.length > 0 &&
       tutorId
     ) {
-      const resolved = await adminMatchingService.resolveManualAssignInput(studentIds, tutorId);
+      const resolved = await adminMatchingService.resolveManualAssignInput(
+        studentIds,
+        tutorId,
+        subjectId,
+      );
       matchRequestIds = resolved.matchRequestIds;
       tutorId = resolved.tutorId;
     }
