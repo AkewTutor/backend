@@ -133,7 +133,12 @@ describe('adminMatching.controller.ts', () => {
       status: 'PENDING_PAYMENT',
     });
     const req = mockReq({
-      body: { tutorId: 'tutor-user', studentIds: ['student-user'], format: 'ONE_TO_ONE' },
+      body: {
+        tutorId: 'tutor-user',
+        studentIds: ['student-user'],
+        subjectId: 'subject-1',
+        format: 'ONE_TO_ONE',
+      },
     });
     const res = mockRes();
 
@@ -142,6 +147,7 @@ describe('adminMatching.controller.ts', () => {
     expect(adminMatchingService.resolveManualAssignInput).toHaveBeenCalledWith(
       ['student-user'],
       'tutor-user',
+      'subject-1',
     );
     expect(adminMatchingService.manuallyAssignTutor).toHaveBeenCalledWith(
       ['req-1'],
