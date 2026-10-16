@@ -170,6 +170,7 @@ export async function manuallyAssembleGroup(
 export async function resolveManualAssignInput(
   studentIds: string[],
   tutorId: string,
+  subjectId?: string,
 ): Promise<{ tutorId: string; matchRequestIds: string[] }> {
   const tutor = await prisma.tutorProfile.findFirst({
     where: { OR: [{ id: tutorId }, { userId: tutorId }] },
@@ -185,6 +186,7 @@ export async function resolveManualAssignInput(
     where: {
       studentId: { in: students.map((s) => s.id) },
       status: 'PENDING_ADMIN_ASSIGNMENT',
+      ...(subjectId ? { subjectId } : {}),
     },
   });
   if (requests.length === 0) {
