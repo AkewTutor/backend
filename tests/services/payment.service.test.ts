@@ -22,6 +22,9 @@ vi.mock('../../src/config/db.js', () => ({
       findUnique: vi.fn(),
       update: vi.fn(),
     },
+    cohort: {
+      updateMany: vi.fn(),
+    },
     pricingConfig: {
       findFirst: vi.fn(),
     },
@@ -305,6 +308,50 @@ describe('handleChapaWebhook / setBillingCycleAnchor', () => {
         data: expect.objectContaining({ billingCycleAnchorDate: expect.any(Date) }),
       }),
     );
+  });
+
+  it('first successful payment activates the membership and its cohort', async () => {
+    const payment = buildPayment({ cohortMembershipId: 'membership-1', status: 'PENDING' });
+    const membership = buildCohortMembership({
+      cohortId: 'cohort-1',
+      status: 'PENDING_PAYMENT',
+      billingCycleAnchorDate: null,
+    });
+    (prisma.payment.findUnique as any).mockResolvedValue({
+      ...payment,
+      cohortMembership: membership,
+    });
+    (prisma.payment.update as any).mockResolvedValue({ ...payment, status: 'SUCCESS' });
+
+    await handleChapaWebhook(webhookPayload({ tx_ref: payment.id }), 'valid-signature');
+
+    expect(prisma.cohortMembership.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { status: 'ACTIVE' } }),
+    );
+    expect(prisma.cohort.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'cohort-1', status: 'PENDING_PAYMENT' },
+        data: { status: 'ACTIVE' },
+      }),
+    );
+  });
+
+  it('a non-pending membership is not re-activated by a later payment', async () => {
+    const payment = buildPayment({ cohortMembershipId: 'membership-3', status: 'PENDING' });
+    const membership = buildCohortMembership({
+      status: 'PAUSED',
+      billingCycleAnchorDate: new Date('2026-08-01T00:00:00Z'),
+    });
+    (prisma.payment.findUnique as any).mockResolvedValue({
+      ...payment,
+      cohortMembership: membership,
+    });
+    (prisma.payment.update as any).mockResolvedValue({ ...payment, status: 'SUCCESS' });
+
+    await handleChapaWebhook(webhookPayload({ tx_ref: payment.id }), 'valid-signature');
+
+    expect(prisma.cohortMembership.update).not.toHaveBeenCalled();
+    expect(prisma.cohort.updateMany).not.toHaveBeenCalled();
   });
 
   it('anchor is never reset on a subsequent recurring payment', async () => {
