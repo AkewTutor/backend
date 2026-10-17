@@ -1,4 +1,4 @@
-import { prisma } from '../config/db.js';
+﻿import { prisma } from '../config/db.js';
 import ApiError from '../utils/ApiError.js';
 import { upload as storageUpload } from '../utils/providers/storage.client.js';
 
@@ -99,9 +99,18 @@ export async function adminManageLibrary(materialId: string, adminId: string, up
 }
 
 export async function adminRecordingCompliance() {
-  return prisma.scheduledSession.findMany({
+  const rows = await prisma.scheduledSession.findMany({
     where: {
       recordingStatus: { in: ['MISSING', 'ESCALATED'] },
     },
+    include: { cohort: { select: { tutorId: true } } },
+    orderBy: { scheduledEnd: 'asc' },
   });
+  return rows.map((row) => ({
+    sessionId: row.id,
+    cohortId: row.cohortId,
+    tutorId: row.cohort?.tutorId ?? null,
+    scheduledEnd: row.scheduledEnd,
+    recordingStatus: row.recordingStatus,
+  }));
 }
