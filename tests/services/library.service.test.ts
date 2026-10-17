@@ -1,7 +1,7 @@
-/**
+﻿/**
  * tests/services/library.service.test.ts
  *
- * Journey step 4.14. Spec: `09-4-class-delivery-library.md` §9.12.
+ * Journey step 4.14. Spec: `09-4-class-delivery-library.md` Â§9.12.
  * FRs: FR-CD-009, FR-AD-014.
  */
 
@@ -75,7 +75,7 @@ describe('uploadMaterial', () => {
     });
   });
 
-  it("declared fileType doesn't match the actual file MIME type — throws ApiError(400, 'Unsupported file type')", async () => {
+  it("declared fileType doesn't match the actual file MIME type â€” throws ApiError(400, 'Unsupported file type')", async () => {
     (prisma.cohort.findUnique as any).mockResolvedValue({ id: COHORT_ID, tutorId: TUTOR_ID });
     // An .exe (MZ header) declared as PDF.
     const exeBuffer = Buffer.from([0x4d, 0x5a, 0x90, 0x00]);
@@ -117,7 +117,7 @@ describe('listCohortMaterials', () => {
   });
 });
 
-describe('listCohortMaterials — Admin and Parent access', () => {
+describe('listCohortMaterials â€” Admin and Parent access', () => {
   beforeEach(resetMocks);
 
   it('Admin reads any cohort without a membership or tutor check', async () => {
@@ -233,5 +233,26 @@ describe('adminManageLibrary', () => {
     );
     const findManyArg = (prisma.scheduledSession.findMany as any).mock.calls[0][0];
     expect(JSON.stringify(findManyArg)).toMatch(/MISSING|ESCALATED/);
+  });
+  it('the recording-compliance queue maps rows to sessionId/cohortId/tutorId for the admin page', async () => {
+    (prisma.scheduledSession.findMany as any).mockResolvedValue([
+      {
+        id: 'session-9',
+        cohortId: COHORT_ID,
+        scheduledEnd: new Date('2026-10-17T12:00:00Z'),
+        recordingStatus: 'ESCALATED',
+        cohort: { tutorId: TUTOR_ID },
+      },
+    ]);
+
+    const { adminRecordingCompliance } = await import('../../src/services/library.service.js');
+    const result = await adminRecordingCompliance();
+
+    expect(result[0]).toMatchObject({
+      sessionId: 'session-9',
+      cohortId: COHORT_ID,
+      tutorId: TUTOR_ID,
+      recordingStatus: 'ESCALATED',
+    });
   });
 });
