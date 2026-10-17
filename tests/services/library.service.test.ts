@@ -19,6 +19,7 @@ vi.mock('../../src/config/db.js', () => ({
       update: vi.fn(),
     },
     scheduledSession: { findMany: vi.fn() },
+    recordingConsent: { findMany: vi.fn() },
   },
 }));
 
@@ -254,5 +255,75 @@ describe('adminManageLibrary', () => {
       tutorId: TUTOR_ID,
       recordingStatus: 'ESCALATED',
     });
+  });
+  it('a completed session whose cohort has an incomplete consent is queued with tutor name and email', async () => {
+    (prisma.scheduledSession.findMany as any).mockResolvedValue([
+      {
+        id: 'session-7',
+        cohortId: COHORT_ID,
+        scheduledEnd: new Date('2026-10-17T12:00:00Z'),
+        recordingStatus: 'UPLOADED',
+        cohort: {
+          tutorId: TUTOR_ID,
+          tutor: { user: { name: 'Tutor Three', email: 't3@example.com' } },
+          memberships: [{ studentId: 'student-1' }, { studentId: 'student-2' }],
+        },
+      },
+    ]);
+    (prisma.recordingConsent.findMany as any).mockResolvedValue([
+      {
+        tutorId: TUTOR_ID,
+        studentId: 'student-1',
+        tutorAcknowledgedAt: new Date(),
+        studentOrParentAcknowledgedAt: new Date(),
+      },
+      {
+        tutorId: TUTOR_ID,
+        studentId: 'student-2',
+        tutorAcknowledgedAt: null,
+        studentOrParentAcknowledgedAt: new Date(),
+      },
+    ]);
+
+    const { adminRecordingCompliance } = await import('../../src/services/library.service.js');
+    const result = await adminRecordingCompliance();
+
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({
+      sessionId: 'session-7',
+      tutorName: 'Tutor Three',
+      tutorEmail: 't3@example.com',
+      consentIncomplete: true,
+      consentMissingCount: 1,
+    });
+  });
+
+  it('a completed, recorded session with complete consent is not queued', async () => {
+    (prisma.scheduledSession.findMany as any).mockResolvedValue([
+      {
+        id: 'session-8',
+        cohortId: COHORT_ID,
+        scheduledEnd: new Date('2026-10-17T12:00:00Z'),
+        recordingStatus: 'UPLOADED',
+        cohort: {
+          tutorId: TUTOR_ID,
+          tutor: { user: { name: 'Tutor Three', email: 't3@example.com' } },
+          memberships: [{ studentId: 'student-1' }],
+        },
+      },
+    ]);
+    (prisma.recordingConsent.findMany as any).mockResolvedValue([
+      {
+        tutorId: TUTOR_ID,
+        studentId: 'student-1',
+        tutorAcknowledgedAt: new Date(),
+        studentOrParentAcknowledgedAt: new Date(),
+      },
+    ]);
+
+    const { adminRecordingCompliance } = await import('../../src/services/library.service.js');
+    const result = await adminRecordingCompliance();
+
+    expect(result).toEqual([]);
   });
 });
