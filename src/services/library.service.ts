@@ -98,19 +98,72 @@ export async function adminManageLibrary(materialId: string, adminId: string, up
   });
 }
 
+function consentKey(tutorId: string, studentId: string) {
+  return tutorId + ':' + studentId;
+}
+
 export async function adminRecordingCompliance() {
-  const rows = await prisma.scheduledSession.findMany({
+  const sessions = await prisma.scheduledSession.findMany({
     where: {
-      recordingStatus: { in: ['MISSING', 'ESCALATED'] },
+      OR: [{ recordingStatus: { in: ['MISSING', 'ESCALATED'] } }, { status: 'COMPLETED' }],
     },
-    include: { cohort: { select: { tutorId: true } } },
+    include: {
+      cohort: {
+        select: {
+          tutorId: true,
+          tutor: { select: { user: { select: { name: true, email: true } } } },
+          memberships: { where: { status: 'ACTIVE' }, select: { studentId: true } },
+        },
+      },
+    },
     orderBy: { scheduledEnd: 'asc' },
   });
-  return rows.map((row) => ({
-    sessionId: row.id,
-    cohortId: row.cohortId,
-    tutorId: row.cohort?.tutorId ?? null,
-    scheduledEnd: row.scheduledEnd,
-    recordingStatus: row.recordingStatus,
-  }));
+
+  const tutorIds = [
+    ...new Set(sessions.map((s) => s.cohort?.tutorId).filter((id): id is string => !!id)),
+  ];
+  const studentIds = [
+    ...new Set(sessions.flatMap((s) => (s.cohort?.memberships ?? []).map((m) => m.studentId))),
+  ];
+  const consents =
+    studentIds.length > 0
+      ? await prisma.recordingConsent.findMany({
+          where: { tutorId: { in: tutorIds }, studentId: { in: studentIds } },
+          select: {
+            tutorId: true,
+            studentId: true,
+            tutorAcknowledgedAt: true,
+            studentOrParentAcknowledgedAt: true,
+          },
+        })
+      : [];
+  const completeConsents = new Set(
+    consents
+      .filter((c) => c.tutorAcknowledgedAt && c.studentOrParentAcknowledgedAt)
+      .map((c) => consentKey(c.tutorId, c.studentId)),
+  );
+
+  return sessions
+    .map((row) => {
+      const tutorId = row.cohort?.tutorId ?? null;
+      const members = row.cohort?.memberships ?? [];
+      const consentMissingCount = members.filter(
+        (m) => !tutorId || !completeConsents.has(consentKey(tutorId, m.studentId)),
+      ).length;
+      return {
+        sessionId: row.id,
+        cohortId: row.cohortId,
+        tutorId,
+        tutorName: row.cohort?.tutor?.user?.name ?? null,
+        tutorEmail: row.cohort?.tutor?.user?.email ?? null,
+        scheduledEnd: row.scheduledEnd,
+        recordingStatus: row.recordingStatus,
+        consentIncomplete: consentMissingCount > 0,
+        consentMissingCount,
+      };
+    })
+    .filter(
+      (r) =>
+        r.recordingStatus === 'MISSING' || r.recordingStatus === 'ESCALATED' || r.consentIncomplete,
+    );
 }
