@@ -9,6 +9,7 @@ export async function listUsers(
   search?: string,
   page: number = 1,
   limit: number = 20,
+  subjectId?: string,
 ) {
   try {
     const safePage = Math.max(1, page);
@@ -17,6 +18,19 @@ export async function listUsers(
 
     let where: any = {};
     if (role) where.role = role;
+
+    // With a subject: tutors must be verified and rank it; students must be waiting for an
+    // admin to assign them to it. Other roles ignore the filter.
+    if (subjectId && role === 'TUTOR') {
+      where.tutorProfile = {
+        verificationStatus: 'VERIFIED',
+        subjectRankings: { some: { subjectId } },
+      };
+    } else if (subjectId && role === 'STUDENT') {
+      where.studentProfile = {
+        matchRequests: { some: { subjectId, status: 'PENDING_ADMIN_ASSIGNMENT' } },
+      };
+    }
 
     if (search) {
       const searchString = typeof search === 'string' ? search : String(search);

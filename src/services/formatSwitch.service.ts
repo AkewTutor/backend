@@ -14,7 +14,7 @@ export async function requestSwitch(
 
   const membership = await prisma.cohortMembership.findFirst({
     where: { studentId, status: 'ACTIVE' },
-    include: { cohort: true },
+    include: { cohort: { include: { tutor: true } } },
   });
 
   if (!membership) {
@@ -51,9 +51,12 @@ export async function requestSwitch(
     refundId = refund ? refund.id : null;
   }
 
-  dispatchNotification(membership.cohort.tutorId, 'FORMAT_SWITCH' as any, {
-    message: 'student switched format',
-  });
+  const tutorUserId = (membership.cohort as any).tutor?.userId;
+  if (tutorUserId) {
+    dispatchNotification(tutorUserId, 'FORMAT_SWITCH' as any, {
+      message: 'student switched format',
+    });
+  }
 
   const mr = await matchingService.createMatchRequestForFormat({
     studentId,

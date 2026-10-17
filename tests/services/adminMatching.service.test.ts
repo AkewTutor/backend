@@ -70,6 +70,7 @@ import {
   manuallyAssembleGroup,
   manuallyAssignTutor,
   rejectBooking,
+  resolveManualAssignInput,
 } from '../../src/services/adminMatching.service.js';
 import ApiError from '../../src/utils/ApiError.js';
 
@@ -132,6 +133,40 @@ describe('listPendingApprovals', () => {
     expect(result.queue.every((item: any) => item.path === 'PATH_C')).toBe(true);
   });
 
+  it('queries only PENDING_ADMIN_APPROVAL cohorts and maps rows to the queue item shape', async () => {
+    const findManySpy = vi.fn().mockResolvedValue([
+      {
+        id: 'c1',
+        format: 'ONE_TO_THREE',
+        tutorId: 't1',
+        tutor: { user: { email: 't4@test.local' } },
+        createdAt: new Date('2026-01-01'),
+        adminOverdueNotifiedAt: null,
+        studentDelayNotifiedAt: null,
+        memberships: [{ studentId: 's1' }, { studentId: 's2' }],
+      },
+    ]);
+    (prisma as any).cohort.findMany = findManySpy;
+
+    const result = await listPendingApprovals(false, undefined, 1, 20);
+
+    expect(findManySpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ status: 'PENDING_ADMIN_APPROVAL' }),
+      }),
+    );
+    expect(result).toMatchObject({ page: 1, limit: 20, total: 1 });
+    expect(result.queue[0]).toMatchObject({
+      cohortId: 'c1',
+      path: 'PATH_C',
+      studentIds: ['s1', 's2'],
+      tutorEmail: 't4@test.local',
+      isOverdue: false,
+    });
+    expect(result.queue[0]).not.toHaveProperty('memberships');
+    expect(result.queue[0]).not.toHaveProperty('tutor');
+  });
+
   it('this function never computes staleness itself — reads isOverdue as stored', async () => {
     const findManySpy = vi
       .fn()
@@ -167,6 +202,24 @@ describe('approveBooking / rejectBooking', () => {
       where: { id: cohortId },
       data: { status: 'PENDING_PAYMENT', adminApprovedById: adminId },
     });
+  });
+
+  it('approve notifies every member of the cohort with MATCH_FOUND', async () => {
+    (prisma.cohort.findUnique as any).mockResolvedValue({
+      id: cohortId,
+      status: 'PENDING_ADMIN_APPROVAL',
+      memberships: [{ studentId: 's1' }, { studentId: 's2' }],
+    });
+    (prisma.cohort.update as any).mockResolvedValue({ id: cohortId, status: 'PENDING_PAYMENT' });
+    (prisma.studentProfile.findUnique as any)
+      .mockResolvedValueOnce({ userId: 'u1' })
+      .mockResolvedValueOnce({ userId: 'u2' });
+
+    await approveBooking(cohortId, adminId);
+
+    expect(dispatchNotification).toHaveBeenCalledTimes(2);
+    expect(dispatchNotification).toHaveBeenCalledWith('u1', 'MATCH_FOUND', { cohortId });
+    expect(dispatchNotification).toHaveBeenCalledWith('u2', 'MATCH_FOUND', { cohortId });
   });
 
   it('approve does not itself confirm the schedule — no session-generation call from here', async () => {
@@ -251,6 +304,32 @@ describe('manuallyAssignTutor / manuallyAssembleGroup', () => {
 
     expect(result.status).toBe('PENDING_PAYMENT');
     expect(prisma.cohort.create).toHaveBeenCalled();
+  });
+
+  it('assign returns the tutorId and notifies the assigned student with MATCH_FOUND', async () => {
+    (prisma.tutorProfile.findUnique as any).mockResolvedValue({
+      id: tutorId,
+      verificationStatus: 'VERIFIED',
+    });
+    (prisma.matchRequest.findMany as any).mockResolvedValue([
+      { id: matchRequestId, subjectId: 'sub-1', studentId: 'student-1' },
+    ]);
+    (prisma.matchRequest.updateMany as any).mockImplementation((args: any) =>
+      Promise.resolve({ count: args.where.id.in.length }),
+    );
+    (prisma.cohort.create as any).mockResolvedValue({
+      id: 'new-cohort',
+      status: 'PENDING_PAYMENT',
+    });
+    (prisma.cohortMembership.createMany as any).mockResolvedValue({ count: 1 });
+    (prisma.studentProfile.findUnique as any).mockResolvedValueOnce({ userId: 'student-user-1' });
+
+    const result = await manuallyAssignTutor([matchRequestId], tutorId, adminId);
+
+    expect(result).toMatchObject({ cohortId: 'new-cohort', tutorId });
+    expect(dispatchNotification).toHaveBeenCalledWith('student-user-1', 'MATCH_FOUND', {
+      cohortId: 'new-cohort',
+    });
   });
 
   it('ineligible tutor rejected — not verified', async () => {
@@ -526,5 +605,36 @@ describe('manuallyAssignTutor / manuallyAssembleGroup', () => {
     });
     expect(prisma.cohort.create).not.toHaveBeenCalled();
     expect(prisma.cohortMembership.createMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('resolveManualAssignInput', () => {
+  beforeEach(() => resetAllMocks());
+
+  it('maps user ids to the tutor profile and the students waiting requests', async () => {
+    (prisma.tutorProfile as any).findFirst = vi.fn().mockResolvedValue({ id: 'tutor-profile' });
+    (prisma.studentProfile as any).findMany = vi
+      .fn()
+      .mockResolvedValue([{ id: 'student-profile' }]);
+    (prisma.matchRequest.findMany as any).mockResolvedValue([{ id: 'req-1' }]);
+
+    const result = await resolveManualAssignInput(['student-user'], 'tutor-user');
+
+    expect(result).toEqual({ tutorId: 'tutor-profile', matchRequestIds: ['req-1'] });
+    expect(prisma.matchRequest.findMany).toHaveBeenCalledWith({
+      where: { studentId: { in: ['student-profile'] }, status: 'PENDING_ADMIN_ASSIGNMENT' },
+    });
+  });
+
+  it('400 when the selected students have no request waiting for assignment', async () => {
+    (prisma.tutorProfile as any).findFirst = vi.fn().mockResolvedValue({ id: 'tutor-profile' });
+    (prisma.studentProfile as any).findMany = vi
+      .fn()
+      .mockResolvedValue([{ id: 'student-profile' }]);
+    (prisma.matchRequest.findMany as any).mockResolvedValue([]);
+
+    await expect(resolveManualAssignInput(['student-user'], 'tutor-user')).rejects.toMatchObject({
+      statusCode: 400,
+    });
   });
 });

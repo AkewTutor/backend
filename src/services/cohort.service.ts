@@ -277,7 +277,7 @@ export async function getMyCohort(
 ): Promise<any> {
   const studentId = callerRole === 'STUDENT' ? callerId : overrides?.studentId || callerId;
   const memberships = await prisma.cohortMembership.findMany({
-    where: { studentId },
+    where: { studentId, status: { not: 'ENDED' } },
     include: {
       cohort: {
         include: { _count: { select: { memberships: { where: { status: { not: 'ENDED' } } } } } },

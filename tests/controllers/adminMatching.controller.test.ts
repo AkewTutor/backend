@@ -17,6 +17,7 @@ vi.mock('../../src/services/adminMatching.service.js', () => ({
   rejectBooking: vi.fn(),
   manuallyAssignTutor: vi.fn(),
   manuallyAssembleGroup: vi.fn(),
+  resolveManualAssignInput: vi.fn(),
 }));
 
 import * as adminMatchingService from '../../src/services/adminMatching.service.js';
@@ -120,6 +121,39 @@ describe('adminMatching.controller.ts', () => {
 
     expect(adminMatchingService.manuallyAssembleGroup).toHaveBeenCalled();
     expect(adminMatchingService.manuallyAssignTutor).not.toHaveBeenCalled();
+  });
+
+  it('manualAssign resolves the admin page body (studentIds + tutor user id) to waiting requests', async () => {
+    (adminMatchingService.resolveManualAssignInput as any).mockResolvedValue({
+      tutorId: 'tutor-profile',
+      matchRequestIds: ['req-1'],
+    });
+    (adminMatchingService.manuallyAssignTutor as any).mockResolvedValue({
+      cohortId,
+      status: 'PENDING_PAYMENT',
+    });
+    const req = mockReq({
+      body: {
+        tutorId: 'tutor-user',
+        studentIds: ['student-user'],
+        subjectId: 'subject-1',
+        format: 'ONE_TO_ONE',
+      },
+    });
+    const res = mockRes();
+
+    await manualAssign(req, res, vi.fn() as NextFunction);
+
+    expect(adminMatchingService.resolveManualAssignInput).toHaveBeenCalledWith(
+      ['student-user'],
+      'tutor-user',
+      'subject-1',
+    );
+    expect(adminMatchingService.manuallyAssignTutor).toHaveBeenCalledWith(
+      ['req-1'],
+      'tutor-profile',
+      expect.anything(),
+    );
   });
 
   it('manualAssign dispatches to manuallyAssignTutor for a single-id request', async () => {

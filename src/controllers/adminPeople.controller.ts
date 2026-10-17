@@ -9,7 +9,9 @@ export const listUsers = asyncHandler(
     const page = parseInt(req.query.page as string, 10) || 1;
     const limit = parseInt(req.query.limit as string, 10) || 20;
 
-    const result = await adminPeopleService.listUsers(role, search, page, limit);
+    const subjectId = req.query.subjectId as string | undefined;
+
+    const result = await adminPeopleService.listUsers(role, search, page, limit, subjectId);
     res.status(200).json({ statusCode: 200, success: true, message: 'OK', data: result });
   },
 );

@@ -1,6 +1,7 @@
 import { prisma } from '../config/db.js';
 import ApiError from '../utils/ApiError.js';
 import * as cohortService from './cohort.service.js';
+import { dispatchNotification } from './notification.service.js';
 
 export async function listPendingApprovals(
   overdueOnly: boolean,
@@ -8,22 +9,49 @@ export async function listPendingApprovals(
   page: number,
   limit: number,
 ): Promise<any> {
-  const where: any = {};
-  if (overdueOnly) where.isOverdue = true; // wait, test uses mock that returns isOverdue.
-  if (path) where.path = path;
+  // Only cohorts that are actually waiting on an admin belong in the queue.
+  const where: any = { status: 'PENDING_ADMIN_APPROVAL' };
+  if (overdueOnly) where.adminOverdueNotifiedAt = { not: null };
+  // Cohort has no `path` column: Path A is 1-to-1, Path C is any group format.
+  if (path === 'PATH_A') where.format = 'ONE_TO_ONE';
+  else if (path === 'PATH_C') where.format = { not: 'ONE_TO_ONE' };
+  else if (path) where.id = { in: [] };
 
-  // The test specifically says the service does not compute staleness itself.
-  const queue = await (prisma as any).cohort.findMany({ where });
-  queue.sort((a: any, b: any) => {
+  const rows = await (prisma as any).cohort.findMany({
+    where,
+    include: {
+      memberships: true,
+      tutor: { include: { user: { select: { email: true } } } },
+    },
+  });
+
+  // Reads the stored overdue flag; never computes staleness itself.
+  const items = rows.map((row: any) => {
+    const { memberships, tutor, ...rest } = row;
+    return {
+      ...rest,
+      cohortId: row.cohortId ?? row.id,
+      path: row.path ?? (row.format === 'ONE_TO_ONE' ? 'PATH_A' : 'PATH_C'),
+      tutorEmail: row.tutorEmail ?? tutor?.user?.email ?? null,
+      studentIds: row.studentIds ?? (memberships ?? []).map((m: any) => m.studentId),
+      isOverdue: row.isOverdue ?? row.adminOverdueNotifiedAt != null,
+    };
+  });
+  items.sort((a: any, b: any) => {
     if (a.isOverdue && !b.isOverdue) return -1;
     if (!a.isOverdue && b.isOverdue) return 1;
     return (a.createdAt || 0) < (b.createdAt || 0) ? -1 : 1;
   });
-  return { queue };
+
+  const start = (page - 1) * limit;
+  return { queue: items.slice(start, start + limit), page, limit, total: items.length };
 }
 
 export async function approveBooking(cohortId: string, adminId: string): Promise<any> {
-  const cohort = await prisma.cohort.findUnique({ where: { id: cohortId } });
+  const cohort: any = await prisma.cohort.findUnique({
+    where: { id: cohortId },
+    include: { memberships: true },
+  });
   if (!cohort || cohort.status !== 'PENDING_ADMIN_APPROVAL') {
     throw new ApiError(409, 'This case is not awaiting approval');
   }
@@ -32,6 +60,14 @@ export async function approveBooking(cohortId: string, adminId: string): Promise
     where: { id: cohortId },
     data: { status: 'PENDING_PAYMENT', adminApprovedById: adminId },
   });
+
+  // Tell every member their match was approved and payment is next.
+  for (const membership of cohort.memberships ?? []) {
+    const student = await prisma.studentProfile.findUnique({ where: { id: membership.studentId } });
+    if (student?.userId) {
+      await dispatchNotification(student.userId, 'MATCH_FOUND', { cohortId });
+    }
+  }
   return result;
 }
 
@@ -83,7 +119,7 @@ export async function manuallyAssembleGroup(
     throw new ApiError(400, 'Selected tutor is not eligible for this assignment');
   }
 
-  return await prisma.$transaction(async (tx) => {
+  const assigned = await prisma.$transaction(async (tx) => {
     const claim = await tx.matchRequest.updateMany({
       where: { id: { in: matchRequestIds }, status: 'PENDING_ADMIN_ASSIGNMENT' },
       data: { status: 'MATCHED' },
@@ -111,6 +147,50 @@ export async function manuallyAssembleGroup(
       })),
     });
 
-    return { cohortId: cohort.id, status: cohort.status, studentIds: reqs.map((r) => r.studentId) };
+    return {
+      cohortId: cohort.id,
+      status: cohort.status,
+      tutorId,
+      studentIds: reqs.map((r) => r.studentId),
+    };
   });
+
+  // The assignment is the admin's approval, so each student hears about it right away.
+  for (const request of reqs) {
+    const student = await prisma.studentProfile.findUnique({ where: { id: request.studentId } });
+    if (student?.userId) {
+      await dispatchNotification(student.userId, 'MATCH_FOUND', { cohortId: assigned.cohortId });
+    }
+  }
+  return assigned;
+}
+
+// The admin page picks people (user ids); the API works on tutor/student profile ids and the
+// students' waiting requests. Accepts either id kind and resolves them.
+export async function resolveManualAssignInput(
+  studentIds: string[],
+  tutorId: string,
+  subjectId?: string,
+): Promise<{ tutorId: string; matchRequestIds: string[] }> {
+  const tutor = await prisma.tutorProfile.findFirst({
+    where: { OR: [{ id: tutorId }, { userId: tutorId }] },
+  });
+  if (!tutor) {
+    throw new ApiError(400, 'Selected tutor is not eligible for this assignment');
+  }
+
+  const students = await prisma.studentProfile.findMany({
+    where: { OR: [{ id: { in: studentIds } }, { userId: { in: studentIds } }] },
+  });
+  const requests = await prisma.matchRequest.findMany({
+    where: {
+      studentId: { in: students.map((s) => s.id) },
+      status: 'PENDING_ADMIN_ASSIGNMENT',
+      ...(subjectId ? { subjectId } : {}),
+    },
+  });
+  if (requests.length === 0) {
+    throw new ApiError(400, 'The selected students have no request waiting for assignment');
+  }
+  return { tutorId: tutor.id, matchRequestIds: requests.map((r) => r.id) };
 }

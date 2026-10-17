@@ -92,6 +92,29 @@ describe('listUsers', () => {
     expect(callArg.where).toMatchObject({ role: 'TUTOR' });
   });
 
+  it('with a subject, tutors must be verified and rank it', async () => {
+    (prisma.user.findMany as any).mockResolvedValue([]);
+
+    await listUsers('TUTOR', undefined, 1, 20, 'subject-1');
+
+    const callArg = (prisma.user.findMany as any).mock.calls[0][0];
+    expect(callArg.where.tutorProfile).toEqual({
+      verificationStatus: 'VERIFIED',
+      subjectRankings: { some: { subjectId: 'subject-1' } },
+    });
+  });
+
+  it('with a subject, students must be waiting for assignment to it', async () => {
+    (prisma.user.findMany as any).mockResolvedValue([]);
+
+    await listUsers('STUDENT', undefined, 1, 20, 'subject-1');
+
+    const callArg = (prisma.user.findMany as any).mock.calls[0][0];
+    expect(callArg.where.studentProfile).toEqual({
+      matchRequests: { some: { subjectId: 'subject-1', status: 'PENDING_ADMIN_ASSIGNMENT' } },
+    });
+  });
+
   it('a search term filters across name/email/phone via an OR clause', async () => {
     (prisma.user.findMany as any).mockResolvedValue([{ id: 'u1', name: 'Amanuel' }]);
 
