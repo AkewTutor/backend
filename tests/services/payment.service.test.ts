@@ -1,17 +1,17 @@
-/**
+﻿/**
  * tests/services/payment.service.test.ts
  *
- * Phase 7, step 7.3. Spec: `09-7-payments-earnings.md` §9.4.
- * FRs: FR-PB-001–004, FR-PB-008. NFRs: NFR-007.
- * OWASP: A01:2021 – Broken Access Control (membership/ownership scoping),
- *        A04:2021 – Insecure Design (server-locked pricing),
- *        A08:2021 – Software and Data Integrity Failures (idempotent
- *        webhook replay), A02:2021 – Cryptographic Failures (no raw
+ * Phase 7, step 7.3. Spec: `09-7-payments-earnings.md` Â§9.4.
+ * FRs: FR-PB-001â€“004, FR-PB-008. NFRs: NFR-007.
+ * OWASP: A01:2021 â€“ Broken Access Control (membership/ownership scoping),
+ *        A04:2021 â€“ Insecure Design (server-locked pricing),
+ *        A08:2021 â€“ Software and Data Integrity Failures (idempotent
+ *        webhook replay), A02:2021 â€“ Cryptographic Failures (no raw
  *        payload/reference leaked to logs on a processing failure).
  *
  * Mocked: Prisma (`src/config/db.ts`), `chapa.client.ts`,
  * `promotion.service.ts`, and `class-delivery-library`'s
- * `session.service.ts → generateSessionsForCohort`.
+ * `session.service.ts â†’ generateSessionsForCohort`.
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -144,7 +144,7 @@ describe('initiatePayment', () => {
     expect((initiateCheckout as any).mock.calls[0][2]).not.toContain('akewtutor.example');
   });
 
-  it('locks the amount in at initiation time — a later Admin price change never retroactively affects the stored Payment', async () => {
+  it('locks the amount in at initiation time â€” a later Admin price change never retroactively affects the stored Payment', async () => {
     const membership = buildCohortMembership({
       cohortId: 'cohort-1',
       studentId: 'student-1',
@@ -241,7 +241,7 @@ describe('initiatePayment', () => {
     });
   });
 
-  it('never confirms the schedule itself — generateSessionsForCohort is never called from initiatePayment', async () => {
+  it('never confirms the schedule itself â€” generateSessionsForCohort is never called from initiatePayment', async () => {
     const membership = buildCohortMembership({
       cohortId: 'cohort-1',
       studentId: 'student-1',
@@ -314,6 +314,7 @@ describe('handleChapaWebhook / setBillingCycleAnchor', () => {
     const payment = buildPayment({ cohortMembershipId: 'membership-1', status: 'PENDING' });
     const membership = buildCohortMembership({
       cohortId: 'cohort-1',
+      studentId: 'student-1',
       status: 'PENDING_PAYMENT',
       billingCycleAnchorDate: null,
     });
@@ -339,7 +340,9 @@ describe('handleChapaWebhook / setBillingCycleAnchor', () => {
   it('a non-pending membership is not re-activated by a later payment', async () => {
     const payment = buildPayment({ cohortMembershipId: 'membership-3', status: 'PENDING' });
     const membership = buildCohortMembership({
-      status: 'PAUSED',
+      cohortId: 'cohort-3',
+      studentId: 'student-3',
+      status: 'ENDED',
       billingCycleAnchorDate: new Date('2026-08-01T00:00:00Z'),
     });
     (prisma.payment.findUnique as any).mockResolvedValue({
@@ -378,7 +381,7 @@ describe('handleChapaWebhook / setBillingCycleAnchor', () => {
     );
   });
 
-  it('FAILED leaves the membership awaiting payment — no schedule generated, no automatic retry', async () => {
+  it('FAILED leaves the membership awaiting payment â€” no schedule generated, no automatic retry', async () => {
     const payment = buildPayment({ cohortMembershipId: 'membership-3', status: 'PENDING' });
     const membership = buildCohortMembership({
       cohortId: 'cohort-3',
@@ -402,7 +405,7 @@ describe('handleChapaWebhook / setBillingCycleAnchor', () => {
     expect(generateSessionsForCohort).not.toHaveBeenCalled();
   });
 
-  it('idempotent against a duplicate webhook delivery — checks terminal status before reprocessing', async () => {
+  it('idempotent against a duplicate webhook delivery â€” checks terminal status before reprocessing', async () => {
     const payment = buildPayment({ cohortMembershipId: 'membership-4', status: 'SUCCESS' });
     const membership = buildCohortMembership({
       cohortId: 'cohort-4',
@@ -478,7 +481,7 @@ describe('getPaymentHistory', () => {
     expect(result).toMatchObject({ payments: [], page: 1, limit: 20, total: 0 });
   });
 
-  it('a Parent viewing a non-relation student throws ApiError(403) — IDOR guard', async () => {
+  it('a Parent viewing a non-relation student throws ApiError(403) â€” IDOR guard', async () => {
     (prisma.parentStudentRelationship.findFirst as any).mockResolvedValue(null);
 
     await expect(
