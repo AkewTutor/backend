@@ -485,3 +485,24 @@ describe('getMyRecordings', () => {
     expect(result.recordings[0]).not.toHaveProperty('session');
   });
 });
+
+describe('keepPermanently ownership', () => {
+  beforeEach(resetMocks);
+
+  it("a tutor cannot keep a recording permanently - the lookup is by the caller's student membership only", async () => {
+    (prisma.recording.findUnique as any).mockResolvedValue({
+      id: RECORDING_ID,
+      sessionId: SESSION_ID,
+      keepPermanently: false,
+      session: { cohortId: COHORT_ID },
+    });
+    (prisma.cohortMembership.findFirst as any).mockResolvedValue(null);
+
+    await expect(keepPermanently(TUTOR_ID, RECORDING_ID)).rejects.toMatchObject({
+      statusCode: 403,
+      message: 'Not authorized to modify this recording',
+    });
+    const where = (prisma.cohortMembership.findFirst as any).mock.calls[0][0].where;
+    expect(where).toEqual({ cohortId: COHORT_ID, studentId: TUTOR_ID });
+  });
+});
