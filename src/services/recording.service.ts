@@ -1,4 +1,4 @@
-import { prisma } from '../config/db.js';
+﻿import { prisma } from '../config/db.js';
 import ApiError from '../utils/ApiError.js';
 import { getConsentStatus } from './recordingConsent.service.js';
 import { upload, getSignedUrl as storageGetSignedUrl } from '../utils/providers/storage.client.js';
@@ -132,7 +132,7 @@ export async function escalateMissing(sessionId: string) {
 }
 
 export async function getMyRecordings(callerId: string, options: any) {
-  const recordings = await prisma.recording.findMany({
+  const rows = await prisma.recording.findMany({
     where: {
       OR: [{ keepPermanently: true }, { expiresAt: { gte: new Date() } }],
       deletedAt: null,
@@ -142,6 +142,12 @@ export async function getMyRecordings(callerId: string, options: any) {
         },
       },
     },
+    include: { session: { select: { cohortId: true } } },
+    orderBy: { createdAt: 'desc' },
   });
+  const recordings = rows.map(({ session, ...rec }) => ({
+    ...rec,
+    cohortId: session?.cohortId ?? null,
+  }));
   return { recordings, page: 1, limit: 20, total: recordings.length };
 }
