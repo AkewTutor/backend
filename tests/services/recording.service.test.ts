@@ -15,7 +15,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../src/config/db.js', () => ({
   prisma: {
-    scheduledSession: { findUnique: vi.fn() },
+    scheduledSession: { findUnique: vi.fn(), findMany: vi.fn() },
     cohortMembership: { findMany: vi.fn(), findFirst: vi.fn() },
     recording: {
       findMany: vi.fn(),
@@ -459,20 +459,29 @@ describe('flagMissing / escalateMissing', () => {
 });
 
 describe('getMyRecordings', () => {
-  it('returns each recording with its cohortId taken from the session', async () => {
+  it('returns each recording with cohortId, session date and its session number in the cohort', async () => {
     (prisma.recording.findMany as any).mockResolvedValue([
       {
         id: 'rec-1',
-        sessionId: SESSION_ID,
+        sessionId: 'session-2',
         keepPermanently: false,
-        session: { cohortId: COHORT_ID },
+        session: { cohortId: COHORT_ID, scheduledStart: new Date('2026-10-26T12:00:00Z') },
       },
+    ]);
+    (prisma.scheduledSession.findMany as any).mockResolvedValue([
+      { id: 'session-1', cohortId: COHORT_ID },
+      { id: 'session-2', cohortId: COHORT_ID },
     ]);
 
     const { getMyRecordings } = await import('../../src/services/recording.service.js');
     const result = await getMyRecordings('student-1', {});
 
-    expect(result.recordings[0]).toMatchObject({ id: 'rec-1', cohortId: COHORT_ID });
+    expect(result.recordings[0]).toMatchObject({
+      id: 'rec-1',
+      cohortId: COHORT_ID,
+      sessionNumber: 2,
+      sessionStart: new Date('2026-10-26T12:00:00Z'),
+    });
     expect(result.recordings[0]).not.toHaveProperty('session');
   });
 });
