@@ -1,4 +1,4 @@
-import { prisma } from '../config/db.js';
+﻿import { prisma } from '../config/db.js';
 import ApiError from '../utils/ApiError.js';
 import { assertAccountStatusAllowsAccess } from './studentProfile.service.js';
 
@@ -82,7 +82,7 @@ export async function provideJitsiLink(tutorId: string, sessionId: string, jitsi
   });
   if (!session) throw new ApiError(404, 'Session not found');
 
-  // ScheduledSession has no tutorId column — the owning tutor is the cohort's tutor.
+  // ScheduledSession has no tutorId column â€” the owning tutor is the cohort's tutor.
   const ownerTutorId = (session as any).tutorId ?? (session as any).cohort?.tutorId;
   if (ownerTutorId && ownerTutorId !== tutorId) {
     throw new ApiError(403, 'Not authorized to provide a link for this session');
@@ -97,7 +97,7 @@ export async function provideJitsiLink(tutorId: string, sessionId: string, jitsi
     data: {
       jitsiLinkUrl,
       jitsiLinkSentAt: now,
-      // providedLateNotice is not a column — it is derived and returned below only.
+      // providedLateNotice is not a column â€” it is derived and returned below only.
     },
   });
 
@@ -156,14 +156,20 @@ export async function markCompleted(tutorId: string, sessionId: string) {
 }
 
 export async function listMySessions(callerId: string, callerRole: string, options?: any) {
-  // Just to pass the tests
   let cohortIds: string[] = [];
   if (callerRole === 'STUDENT') {
     const memberships = await prisma.cohortMembership.findMany({ where: { studentId: callerId } });
     cohortIds = memberships.map((m) => m.cohortId);
+  } else if (callerRole === 'TUTOR') {
+    const cohorts = await prisma.cohort.findMany({
+      where: { tutorId: callerId },
+      select: { id: true },
+    });
+    cohortIds = cohorts.map((cohort) => cohort.id);
   }
   const sessions = await prisma.scheduledSession.findMany({
     where: { cohortId: { in: cohortIds } },
+    orderBy: { scheduledStart: 'asc' },
   });
   return { sessions };
 }
