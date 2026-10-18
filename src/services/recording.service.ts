@@ -142,12 +142,34 @@ export async function getMyRecordings(callerId: string, options: any) {
         },
       },
     },
-    include: { session: { select: { cohortId: true } } },
+    include: { session: { select: { cohortId: true, scheduledStart: true } } },
     orderBy: { createdAt: 'desc' },
   });
+
+  const cohortIds = [
+    ...new Set(rows.map((r) => r.session?.cohortId).filter((id): id is string => !!id)),
+  ];
+  const cohortSessions =
+    cohortIds.length > 0
+      ? await prisma.scheduledSession.findMany({
+          where: { cohortId: { in: cohortIds } },
+          select: { id: true, cohortId: true },
+          orderBy: { scheduledStart: 'asc' },
+        })
+      : [];
+  const counters = new Map<string, number>();
+  const sessionNumbers = new Map<string, number>();
+  for (const s of cohortSessions) {
+    const next = (counters.get(s.cohortId) ?? 0) + 1;
+    counters.set(s.cohortId, next);
+    sessionNumbers.set(s.id, next);
+  }
+
   const recordings = rows.map(({ session, ...rec }) => ({
     ...rec,
     cohortId: session?.cohortId ?? null,
+    sessionStart: session?.scheduledStart ?? null,
+    sessionNumber: sessionNumbers.get(rec.sessionId) ?? null,
   }));
   return { recordings, page: 1, limit: 20, total: recordings.length };
 }
