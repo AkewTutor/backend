@@ -1,6 +1,17 @@
 ﻿import { prisma } from '../config/db.js';
 import ApiError from '../utils/ApiError.js';
-import { upload as storageUpload } from '../utils/providers/storage.client.js';
+import {
+  upload as storageUpload,
+  getSignedUrl as storageGetSignedUrl,
+} from '../utils/providers/storage.client.js';
+
+const LEGACY_FILE_URL_PREFIX = 'https://r2.akewtutor.com/';
+
+function toStorageKey(fileUrl: string) {
+  return fileUrl.startsWith(LEGACY_FILE_URL_PREFIX)
+    ? fileUrl.slice(LEGACY_FILE_URL_PREFIX.length)
+    : fileUrl;
+}
 
 export async function uploadMaterial(
   tutorId: string,
@@ -28,7 +39,7 @@ export async function uploadMaterial(
   const { storageKey } = await storageUpload(
     `library/${cohortId}/${Date.now()}-${fileType}`,
     fileBuffer,
-    'application/pdf',
+    fileType === 'PDF' ? 'application/pdf' : 'application/octet-stream',
   );
 
   return prisma.libraryMaterial.create({
@@ -37,7 +48,7 @@ export async function uploadMaterial(
       uploadedByTutorId: tutorId,
       title,
       fileType: fileType as any,
-      fileUrl: `https://r2.akewtutor.com/${storageKey}`,
+      fileUrl: storageKey,
     },
   });
 }
@@ -77,11 +88,19 @@ export async function listCohortMaterials(callerId: string, cohortId: string, ro
     }
   }
 
-  return prisma.libraryMaterial.findMany({
+  const materials = await prisma.libraryMaterial.findMany({
     where: { cohortId, removedAt: null },
     select: { id: true, title: true, fileType: true, fileUrl: true, createdAt: true },
     orderBy: { createdAt: 'desc' },
   });
+  // fileUrl holds the storage key (older rows hold the legacy r2.akewtutor.com URL);
+  // hand back a short-lived signed download URL instead.
+  return Promise.all(
+    materials.map(async (m) => ({
+      ...m,
+      fileUrl: m.fileUrl ? await storageGetSignedUrl(toStorageKey(m.fileUrl), 3600) : m.fileUrl,
+    })),
+  );
 }
 
 export async function adminManageLibrary(materialId: string, adminId: string, updates: any) {
