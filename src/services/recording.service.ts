@@ -60,7 +60,7 @@ export async function getSignedUrl(callerId: string, recordingId: string) {
   const membership = await prisma.cohortMembership.findFirst({
     where: {
       cohortId: recording.session.cohortId,
-      OR: [{ studentId: callerId }, { cohort: { tutorId: callerId } }],
+      studentId: callerId,
     },
   });
 
@@ -82,7 +82,7 @@ export async function keepPermanently(callerId: string, recordingId: string) {
   const membership = await prisma.cohortMembership.findFirst({
     where: {
       cohortId: recording.session.cohortId,
-      OR: [{ studentId: callerId }, { cohort: { tutorId: callerId } }],
+      studentId: callerId,
     },
   });
 
