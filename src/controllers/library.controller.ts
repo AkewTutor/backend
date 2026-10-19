@@ -8,7 +8,7 @@ import { resolveCallerProfileId, resolveGamificationCallerId } from '../utils/pr
 export const upload = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const tutorId = await resolveCallerProfileId((req as any).user);
-    const { cohortId, title, fileType } = req.body;
+    const { cohortId, title } = req.body;
     const file = req.file;
     if (!file) {
       throw new ApiError(HTTP_STATUS.BAD_REQUEST, 'File is required');
@@ -18,7 +18,7 @@ export const upload = async (req: Request, res: Response, next: NextFunction) =>
       tutorId,
       cohortId,
       title,
-      fileType,
+      undefined,
       file.buffer,
     );
     res
