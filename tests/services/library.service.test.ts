@@ -392,6 +392,42 @@ describe('material file URLs', () => {
     },
   );
 
+  const mp4 = Buffer.concat([Buffer.from([0, 0, 0, 0x18]), Buffer.from('ftypmp42')]);
+  const mov = Buffer.concat([Buffer.from([0, 0, 0, 0x14]), Buffer.from('ftypqt  ')]);
+  const webm = Buffer.from([0x1a, 0x45, 0xdf, 0xa3, 0, 0]);
+
+  it.each([
+    ['MP4', mp4, 'video/mp4'],
+    ['MOV', mov, 'video/quicktime'],
+    ['WEBM', webm, 'video/webm'],
+  ])('accepts %s by content and stores it as VIDEO', async (_n, buf, contentType) => {
+    (prisma.cohort.findUnique as any).mockResolvedValue({ id: COHORT_ID, tutorId: TUTOR_ID });
+    (storageUpload as any).mockResolvedValue({ storageKey: 'library/c1/v' });
+    (prisma.libraryMaterial.create as any).mockResolvedValue({ id: MATERIAL_ID });
+
+    await uploadMaterial(TUTOR_ID, COHORT_ID, 'Lesson', undefined, buf);
+
+    expect(storageUpload).toHaveBeenCalledWith(expect.any(String), buf, contentType);
+    expect((prisma.libraryMaterial.create as any).mock.calls[0][0].data.fileType).toBe('VIDEO');
+  });
+
+  it('rejects a document over 10 MB with 413 but accepts a video over 10 MB', async () => {
+    (prisma.cohort.findUnique as any).mockResolvedValue({ id: COHORT_ID, tutorId: TUTOR_ID });
+    (storageUpload as any).mockResolvedValue({ storageKey: 'library/c1/big' });
+    (prisma.libraryMaterial.create as any).mockResolvedValue({ id: MATERIAL_ID });
+    const bigPdf = Buffer.concat([Buffer.from('%PDF-1.4'), Buffer.alloc(10 * 1024 * 1024)]);
+    const bigMp4 = Buffer.concat([mp4, Buffer.alloc(10 * 1024 * 1024)]);
+
+    await expect(
+      uploadMaterial(TUTOR_ID, COHORT_ID, 'Big', undefined, bigPdf),
+    ).rejects.toMatchObject({
+      statusCode: 413,
+    });
+    await expect(
+      uploadMaterial(TUTOR_ID, COHORT_ID, 'Big video', undefined, bigMp4),
+    ).resolves.toBeDefined();
+  });
+
   it('rejects an exe and a plain text file without storing anything', async () => {
     (prisma.cohort.findUnique as any).mockResolvedValue({ id: COHORT_ID, tutorId: TUTOR_ID });
     for (const buf of [Buffer.from([0x4d, 0x5a, 0x90, 0x00]), Buffer.from('just some text')]) {
