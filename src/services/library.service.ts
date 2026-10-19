@@ -13,14 +13,6 @@ function toStorageKey(fileUrl: string) {
     : fileUrl;
 }
 
-const LEGACY_FILE_URL_PREFIX = 'https://r2.akewtutor.com/';
-
-function toStorageKey(fileUrl: string) {
-  return fileUrl.startsWith(LEGACY_FILE_URL_PREFIX)
-    ? fileUrl.slice(LEGACY_FILE_URL_PREFIX.length)
-    : fileUrl;
-}
-
 export async function uploadMaterial(
   tutorId: string,
   cohortId: string,
