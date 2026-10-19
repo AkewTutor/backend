@@ -13,11 +13,22 @@ function toStorageKey(fileUrl: string) {
     : fileUrl;
 }
 
-type DetectedMaterial = { fileType: 'PDF' | 'NOTE'; contentType: string; ext: string };
+type DetectedMaterial = { fileType: 'PDF' | 'NOTE' | 'VIDEO'; contentType: string; ext: string };
 
 function detectMaterialType(buf: Buffer): DetectedMaterial | null {
   const starts = (...bytes: number[]) =>
     buf.length >= bytes.length && bytes.every((b, i) => buf[i] === b);
+  if (buf.length >= 12 && buf.toString('latin1', 4, 8) === 'ftyp') {
+    const isMov = buf.toString('latin1', 8, 12) === 'qt  ';
+    return {
+      fileType: 'VIDEO',
+      contentType: isMov ? 'video/quicktime' : 'video/mp4',
+      ext: isMov ? 'mov' : 'mp4',
+    };
+  }
+  if (starts(0x1a, 0x45, 0xdf, 0xa3)) {
+    return { fileType: 'VIDEO', contentType: 'video/webm', ext: 'webm' };
+  }
   if (starts(0x25, 0x50, 0x44, 0x46)) {
     return { fileType: 'PDF', contentType: 'application/pdf', ext: 'pdf' };
   }
@@ -62,7 +73,14 @@ export async function uploadMaterial(
   // Type is derived from the file content, never from the client
   const detected = detectMaterialType(fileBuffer);
   if (!detected) {
-    throw new ApiError(400, 'Unsupported file type. Allowed: PDF, DOC, DOCX, JPG, PNG, WEBP');
+    throw new ApiError(
+      400,
+      'Unsupported file type. Allowed: PDF, DOC, DOCX, JPG, PNG, WEBP, MP4, WEBM, MOV',
+    );
+  }
+
+  if (detected.fileType !== 'VIDEO' && fileBuffer.length > 10 * 1024 * 1024) {
+    throw new ApiError(413, 'File too large (max 10 MB, or 100 MB for video)');
   }
 
   const { storageKey } = await storageUpload(
