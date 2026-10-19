@@ -11,8 +11,8 @@ import {
   adminRecordingCompliance,
 } from '../controllers/library.controller.js';
 
-const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
-const ALLOWED_EXT = /\.(pdf|doc|docx|jpe?g|png|webp)$/i;
+const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
+const ALLOWED_EXT = /\.(pdf|doc|docx|jpe?g|png|webp|mp4|webm|mov)$/i;
 const ALLOWED_MIME = new Set([
   'application/pdf',
   'application/msword',
@@ -20,6 +20,9 @@ const ALLOWED_MIME = new Set([
   'image/jpeg',
   'image/png',
   'image/webp',
+  'video/mp4',
+  'video/webm',
+  'video/quicktime',
 ]);
 
 const uploadMiddleware = multer({
@@ -27,7 +30,12 @@ const uploadMiddleware = multer({
   limits: { fileSize: MAX_UPLOAD_BYTES },
   fileFilter: (_req, file, cb) => {
     if (!ALLOWED_EXT.test(file.originalname) || !ALLOWED_MIME.has(file.mimetype)) {
-      cb(new ApiError(400, 'Unsupported file type. Allowed: PDF, DOC, DOCX, JPG, PNG, WEBP'));
+      cb(
+        new ApiError(
+          400,
+          'Unsupported file type. Allowed: PDF, DOC, DOCX, JPG, PNG, WEBP, MP4, WEBM, MOV',
+        ),
+      );
       return;
     }
     cb(null, true);
@@ -38,7 +46,7 @@ const uploadMaterialFile = (req: any, res: any, next: any) => {
   uploadMiddleware.single('file')(req, res, (err: unknown) => {
     if (!err) return next();
     if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
-      return next(new ApiError(413, 'File too large (max 10 MB)'));
+      return next(new ApiError(413, 'File too large (max 10 MB, or 100 MB for video)'));
     }
     return next(err);
   });
