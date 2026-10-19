@@ -636,6 +636,7 @@ enum MaterialFileType {
   PDF
   NOTE
   BOOK
+  VIDEO
 }
 
 model ScheduledSession {
