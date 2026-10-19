@@ -383,3 +383,56 @@ describe('material file URLs', () => {
     expect(result[1].fileUrl).toBe('https://signed/library/c1/2-PDF');
   });
 });
+
+describe('material file URLs', () => {
+  beforeEach(resetMocks);
+
+  it('stores the storage key (not a hardcoded host URL) and a PDF content type when a PDF is uploaded', async () => {
+    (prisma.cohort.findUnique as any).mockResolvedValue({ id: COHORT_ID, tutorId: TUTOR_ID });
+    (storageUpload as any).mockResolvedValue({ storageKey: 'library/c1/123-PDF' });
+    (prisma.libraryMaterial.create as any).mockResolvedValue({ id: MATERIAL_ID });
+
+    await uploadMaterial(TUTOR_ID, COHORT_ID, 'Notes', 'PDF', Buffer.from('%PDF-1.4 x'));
+
+    expect((prisma.libraryMaterial.create as any).mock.calls[0][0].data.fileUrl).toBe(
+      'library/c1/123-PDF',
+    );
+    expect(storageUpload).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(Buffer),
+      'application/pdf',
+    );
+  });
+
+  it('uses a generic content type for non-PDF material types', async () => {
+    (prisma.cohort.findUnique as any).mockResolvedValue({ id: COHORT_ID, tutorId: TUTOR_ID });
+    (storageUpload as any).mockResolvedValue({ storageKey: 'library/c1/124-NOTE' });
+    (prisma.libraryMaterial.create as any).mockResolvedValue({ id: MATERIAL_ID });
+
+    await uploadMaterial(TUTOR_ID, COHORT_ID, 'Photo', 'NOTE', Buffer.from('not-a-pdf'));
+
+    expect(storageUpload).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(Buffer),
+      'application/octet-stream',
+    );
+  });
+
+  it('returns signed download URLs, resolving legacy r2.akewtutor.com URLs to their storage key', async () => {
+    (prisma.libraryMaterial.findMany as any).mockResolvedValue([
+      {
+        id: MATERIAL_ID,
+        title: 'Old',
+        fileType: 'PDF',
+        fileUrl: 'https://r2.akewtutor.com/library/c1/1-PDF',
+      },
+      { id: 'material-2', title: 'New', fileType: 'PDF', fileUrl: 'library/c1/2-PDF' },
+    ]);
+    (storageGetSignedUrl as any).mockImplementation(async (key: string) => 'https://signed/' + key);
+
+    const result = await listCohortMaterials(ADMIN_ID, COHORT_ID, 'ADMIN');
+
+    expect(result[0].fileUrl).toBe('https://signed/library/c1/1-PDF');
+    expect(result[1].fileUrl).toBe('https://signed/library/c1/2-PDF');
+  });
+});
