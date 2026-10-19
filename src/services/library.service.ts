@@ -1,4 +1,4 @@
-﻿import { prisma } from '../config/db.js';
+import { prisma } from '../config/db.js';
 import ApiError from '../utils/ApiError.js';
 import {
   upload as storageUpload,
@@ -13,11 +13,45 @@ function toStorageKey(fileUrl: string) {
     : fileUrl;
 }
 
+type DetectedMaterial = { fileType: 'PDF' | 'NOTE'; contentType: string; ext: string };
+
+function detectMaterialType(buf: Buffer): DetectedMaterial | null {
+  const starts = (...bytes: number[]) =>
+    buf.length >= bytes.length && bytes.every((b, i) => buf[i] === b);
+  if (starts(0x25, 0x50, 0x44, 0x46)) {
+    return { fileType: 'PDF', contentType: 'application/pdf', ext: 'pdf' };
+  }
+  if (starts(0xff, 0xd8, 0xff)) {
+    return { fileType: 'NOTE', contentType: 'image/jpeg', ext: 'jpg' };
+  }
+  if (starts(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a)) {
+    return { fileType: 'NOTE', contentType: 'image/png', ext: 'png' };
+  }
+  if (
+    buf.length >= 12 &&
+    buf.toString('latin1', 0, 4) === 'RIFF' &&
+    buf.toString('latin1', 8, 12) === 'WEBP'
+  ) {
+    return { fileType: 'NOTE', contentType: 'image/webp', ext: 'webp' };
+  }
+  if (starts(0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1)) {
+    return { fileType: 'NOTE', contentType: 'application/msword', ext: 'doc' };
+  }
+  if (starts(0x50, 0x4b, 0x03, 0x04) && buf.includes('word/')) {
+    return {
+      fileType: 'NOTE',
+      contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      ext: 'docx',
+    };
+  }
+  return null;
+}
+
 export async function uploadMaterial(
   tutorId: string,
   cohortId: string,
   title: string,
-  fileType: string,
+  _fileType: string | undefined,
   fileBuffer: Buffer,
 ) {
   const cohort = await prisma.cohort.findUnique({ where: { id: cohortId } });
@@ -25,21 +59,16 @@ export async function uploadMaterial(
     throw new ApiError(403, 'Not authorized to upload to this cohort');
   }
 
-  // Magic byte checks
-  if (fileBuffer.length >= 2 && fileBuffer[0] === 0x4d && fileBuffer[1] === 0x5a) {
-    throw new ApiError(400, 'Unsupported file type');
-  }
-  if (
-    fileType === 'PDF' &&
-    (fileBuffer.length < 4 || fileBuffer.toString('latin1', 0, 4) !== '%PDF')
-  ) {
-    throw new ApiError(400, 'Unsupported file type');
+  // Type is derived from the file content, never from the client
+  const detected = detectMaterialType(fileBuffer);
+  if (!detected) {
+    throw new ApiError(400, 'Unsupported file type. Allowed: PDF, DOC, DOCX, JPG, PNG, WEBP');
   }
 
   const { storageKey } = await storageUpload(
-    `library/${cohortId}/${Date.now()}-${fileType}`,
+    `library/${cohortId}/${Date.now()}.${detected.ext}`,
     fileBuffer,
-    fileType === 'PDF' ? 'application/pdf' : 'application/octet-stream',
+    detected.contentType,
   );
 
   return prisma.libraryMaterial.create({
@@ -47,12 +76,11 @@ export async function uploadMaterial(
       cohortId,
       uploadedByTutorId: tutorId,
       title,
-      fileType: fileType as any,
+      fileType: detected.fileType as any,
       fileUrl: storageKey,
     },
   });
 }
-
 /**
  * callerId is the role's profile id (StudentProfile / TutorProfile / ParentProfile);
  * for ADMIN it is the user id and is unused. Admin has read access to any cohort.
