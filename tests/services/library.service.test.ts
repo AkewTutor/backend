@@ -86,7 +86,10 @@ describe('uploadMaterial', () => {
 
     await expect(
       uploadMaterial(TUTOR_ID, COHORT_ID, 'Suspicious', 'PDF', exeBuffer),
-    ).rejects.toMatchObject({ statusCode: 400, message: 'Unsupported file type' });
+    ).rejects.toMatchObject({
+      statusCode: 400,
+      message: expect.stringContaining('Unsupported file type'),
+    });
   });
 });
 
@@ -351,18 +354,55 @@ describe('material file URLs', () => {
     );
   });
 
-  it('uses a generic content type for non-PDF material types', async () => {
+  const SAMPLES: Array<[string, Buffer, string, string]> = [
+    [
+      'PNG',
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0]),
+      'image/png',
+      'NOTE',
+    ],
+    ['JPEG', Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0]), 'image/jpeg', 'NOTE'],
+    ['WEBP', Buffer.from('RIFF0000WEBPVP8 ', 'latin1'), 'image/webp', 'NOTE'],
+    [
+      'DOC',
+      Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1, 0, 0]),
+      'application/msword',
+      'NOTE',
+    ],
+    [
+      'DOCX',
+      Buffer.concat([Buffer.from([0x50, 0x4b, 0x03, 0x04]), Buffer.from('xx word/document.xml')]),
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'NOTE',
+    ],
+    ['PDF', Buffer.from('%PDF-1.4 x'), 'application/pdf', 'PDF'],
+  ];
+
+  it.each(SAMPLES)(
+    'accepts and classifies %s by content',
+    async (_n, buf, contentType, fileType) => {
+      (prisma.cohort.findUnique as any).mockResolvedValue({ id: COHORT_ID, tutorId: TUTOR_ID });
+      (storageUpload as any).mockResolvedValue({ storageKey: 'library/c1/k' });
+      (prisma.libraryMaterial.create as any).mockResolvedValue({ id: MATERIAL_ID });
+
+      await uploadMaterial(TUTOR_ID, COHORT_ID, 'Item', undefined, buf);
+
+      expect(storageUpload).toHaveBeenCalledWith(expect.any(String), buf, contentType);
+      expect((prisma.libraryMaterial.create as any).mock.calls[0][0].data.fileType).toBe(fileType);
+    },
+  );
+
+  it('rejects an exe and a plain text file without storing anything', async () => {
     (prisma.cohort.findUnique as any).mockResolvedValue({ id: COHORT_ID, tutorId: TUTOR_ID });
-    (storageUpload as any).mockResolvedValue({ storageKey: 'library/c1/124-NOTE' });
-    (prisma.libraryMaterial.create as any).mockResolvedValue({ id: MATERIAL_ID });
-
-    await uploadMaterial(TUTOR_ID, COHORT_ID, 'Photo', 'NOTE', Buffer.from('not-a-pdf'));
-
-    expect(storageUpload).toHaveBeenCalledWith(
-      expect.any(String),
-      expect.any(Buffer),
-      'application/octet-stream',
-    );
+    for (const buf of [Buffer.from([0x4d, 0x5a, 0x90, 0x00]), Buffer.from('just some text')]) {
+      await expect(
+        uploadMaterial(TUTOR_ID, COHORT_ID, 'Bad', undefined, buf),
+      ).rejects.toMatchObject({
+        statusCode: 400,
+      });
+    }
+    expect(storageUpload).not.toHaveBeenCalled();
+    expect(prisma.libraryMaterial.create).not.toHaveBeenCalled();
   });
 
   it('returns signed download URLs, resolving legacy r2.akewtutor.com URLs to their storage key', async () => {
