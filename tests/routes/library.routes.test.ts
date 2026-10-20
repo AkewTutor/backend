@@ -18,6 +18,7 @@ vi.mock('../../src/services/library.service.js', () => ({
   listCohortMaterials: vi.fn(),
   adminManageLibrary: vi.fn(),
   adminRecordingCompliance: vi.fn(),
+  adminLibraryActivity: vi.fn(),
   removeMaterial: vi.fn(),
 }));
 
