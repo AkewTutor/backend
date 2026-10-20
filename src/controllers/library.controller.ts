@@ -72,3 +72,13 @@ export const adminRecordingCompliance = async (req: Request, res: Response, next
     next(error);
   }
 };
+
+export const remove = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const tutorId = await resolveCallerProfileId((req as any).user);
+    const result = await libraryService.removeMaterial(tutorId, req.params.id as string);
+    res.status(HTTP_STATUS.OK).json(new SuccessResponse(HTTP_STATUS.OK, 'OK', result));
+  } catch (error) {
+    next(error);
+  }
+};
