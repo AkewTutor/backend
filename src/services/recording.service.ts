@@ -178,7 +178,17 @@ export async function getMyRecordings(callerId: string, options: any) {
     sessionNumbers.set(s.id, next);
   }
 
-  const recordings = rows.map(({ session, ...rec }) => ({
+  const checks = await Promise.all(rows.map((r) => objectExists(r.storageKey)));
+  const missing = rows.filter((_, i) => checks[i] === false);
+  if (missing.length > 0) {
+    await prisma.recording.updateMany({
+      where: { id: { in: missing.map((m) => m.id) } },
+      data: { deletedAt: new Date() },
+    });
+  }
+  const liveRows = rows.filter((_, i) => checks[i] !== false);
+
+  const recordings = liveRows.map(({ session, ...rec }) => ({
     ...rec,
     cohortId: session?.cohortId ?? null,
     sessionStart: session?.scheduledStart ?? null,
