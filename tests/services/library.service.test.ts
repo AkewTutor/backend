@@ -532,7 +532,7 @@ describe('listCohortMaterials visibility', () => {
       expect.objectContaining({ where: { cohortId: COHORT_ID } }),
     );
     expect(result).toHaveLength(1);
-    expect(result[0].removedAt).toBeTruthy();
+    expect((result[0] as any).removedAt).toBeTruthy();
     expect(client.objectExists).not.toHaveBeenCalled();
   });
 
