@@ -145,13 +145,23 @@ export async function listCohortMaterials(callerId: string, cohortId: string, ro
   }
 
   const materials = await prisma.libraryMaterial.findMany({
-    where: { cohortId, removedAt: null },
-    select: { id: true, title: true, fileType: true, fileUrl: true, createdAt: true },
+    where: role === 'ADMIN' ? { cohortId } : { cohortId, removedAt: null },
+    select: {
+      id: true,
+      title: true,
+      fileType: true,
+      fileUrl: true,
+      createdAt: true,
+      removedAt: true,
+    },
     orderBy: { createdAt: 'desc' },
   });
-  const present = await Promise.all(
-    materials.map((m) => (m.fileUrl ? objectExists(toStorageKey(m.fileUrl)) : true)),
-  );
+  const present: boolean[] =
+    role === 'ADMIN'
+      ? materials.map(() => true)
+      : await Promise.all(
+          materials.map((m) => (m.fileUrl ? objectExists(toStorageKey(m.fileUrl)) : true)),
+        );
   const missingIds = materials.filter((_, i) => present[i] === false).map((m) => m.id);
   if (missingIds.length > 0) {
     await prisma.libraryMaterial.updateMany({
