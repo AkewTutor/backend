@@ -7,6 +7,15 @@ import {
 
 const LEGACY_FILE_URL_PREFIX = 'https://r2.akewtutor.com/';
 
+function downloadName(title: string, fileUrl: string) {
+  const key = fileUrl.startsWith(LEGACY_FILE_URL_PREFIX)
+    ? fileUrl.slice(LEGACY_FILE_URL_PREFIX.length)
+    : fileUrl;
+  const ext = key.split('.').pop() ?? '';
+  const base = title.replace(/[^A-Za-z0-9 _.-]/g, '_').trim() || 'download';
+  return ext ? base + '.' + ext : base;
+}
+
 function toStorageKey(fileUrl: string) {
   return fileUrl.startsWith(LEGACY_FILE_URL_PREFIX)
     ? fileUrl.slice(LEGACY_FILE_URL_PREFIX.length)
@@ -145,6 +154,9 @@ export async function listCohortMaterials(callerId: string, cohortId: string, ro
     materials.map(async (m) => ({
       ...m,
       fileUrl: m.fileUrl ? await storageGetSignedUrl(toStorageKey(m.fileUrl), 3600) : m.fileUrl,
+      downloadUrl: m.fileUrl
+        ? await storageGetSignedUrl(toStorageKey(m.fileUrl), 3600, downloadName(m.title, m.fileUrl))
+        : m.fileUrl,
     })),
   );
 }
@@ -231,4 +243,20 @@ export async function adminRecordingCompliance() {
       (r) =>
         r.recordingStatus === 'MISSING' || r.recordingStatus === 'ESCALATED' || r.consentIncomplete,
     );
+}
+
+export async function removeMaterial(tutorId: string, materialId: string) {
+  const material = await prisma.libraryMaterial.findUnique({ where: { id: materialId } });
+  if (!material || material.removedAt) throw new ApiError(404, 'Material not found');
+
+  const cohort = await prisma.cohort.findUnique({ where: { id: material.cohortId } });
+  if (!cohort || cohort.tutorId !== tutorId) {
+    throw new ApiError(403, 'Not authorized to remove this material');
+  }
+
+  await prisma.libraryMaterial.update({
+    where: { id: materialId },
+    data: { removedAt: new Date() },
+  });
+  return { id: materialId, removed: true };
 }
