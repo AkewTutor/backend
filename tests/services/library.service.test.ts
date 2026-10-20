@@ -564,3 +564,52 @@ describe('listCohortMaterials visibility', () => {
     });
   });
 });
+
+describe('adminLibraryActivity', () => {
+  beforeEach(resetMocks);
+
+  const user = (n: string) => ({ name: n, email: n + '@x.com', phone: '+2519' + n.length });
+  const row = (id: string, createdAt: string, removedAt: string | null) => ({
+    id,
+    title: id,
+    fileType: 'PDF',
+    fileUrl: 'library/c1/' + id + '.pdf',
+    createdAt: new Date(createdAt),
+    removedAt: removedAt ? new Date(removedAt) : null,
+    cohortId: COHORT_ID,
+    cohort: {
+      tutor: { user: user('tutor') },
+      memberships: [{ student: { user: user('stu') } }],
+    },
+  });
+
+  it('no search term: empty where, newest activity first (a delete counts as activity)', async () => {
+    const { adminLibraryActivity } = await import('../../src/services/library.service.js');
+    (prisma.libraryMaterial.findMany as any).mockResolvedValue([
+      row('uploaded-recent', '2026-10-10T00:00:00Z', null),
+      row('deleted-later', '2026-09-01T00:00:00Z', '2026-10-15T00:00:00Z'),
+    ]);
+    (storageGetSignedUrl as any).mockImplementation(async (k: string) => 'https://signed/' + k);
+
+    const result = await adminLibraryActivity();
+
+    expect(prisma.libraryMaterial.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: {} }),
+    );
+    expect(result.map((r: { id: string }) => r.id)).toEqual(['deleted-later', 'uploaded-recent']);
+    expect(result[0].tutor).toMatchObject({ email: 'tutor@x.com' });
+    expect(result[0].students).toHaveLength(1);
+  });
+
+  it('search term matches tutor or student by email, phone or name', async () => {
+    const { adminLibraryActivity } = await import('../../src/services/library.service.js');
+    (prisma.libraryMaterial.findMany as any).mockResolvedValue([]);
+
+    await adminLibraryActivity('  abc@x.com ');
+
+    const arg = (prisma.libraryMaterial.findMany as any).mock.calls[0][0];
+    expect(arg.where.OR).toHaveLength(2);
+    expect(JSON.stringify(arg.where)).toContain('abc@x.com');
+    expect(JSON.stringify(arg.where)).toContain('phone');
+  });
+});
