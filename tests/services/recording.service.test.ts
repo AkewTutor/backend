@@ -1,4 +1,4 @@
-﻿/**
+/**
  * tests/services/recording.service.test.ts
  *
  * Journey step 4.10. Spec: `09-4-class-delivery-library.md` Â§9.9.
@@ -33,6 +33,7 @@ vi.mock('../../src/services/recordingConsent.service.js', () => ({
 vi.mock('../../src/utils/providers/storage.client.js', () => ({
   upload: vi.fn(),
   getSignedUrl: vi.fn(),
+  objectExists: vi.fn().mockResolvedValue(true),
 }));
 
 vi.mock('../../src/services/sessionMiss.service.js', () => ({
