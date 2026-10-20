@@ -26,6 +26,7 @@ vi.mock('../../src/config/db.js', () => ({
 vi.mock('../../src/utils/providers/storage.client.js', () => ({
   upload: vi.fn(),
   getSignedUrl: vi.fn(),
+  objectExists: vi.fn().mockResolvedValue(true),
 }));
 
 import { prisma } from '../../src/config/db.js';
