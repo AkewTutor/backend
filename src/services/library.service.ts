@@ -152,7 +152,7 @@ export async function listCohortMaterials(callerId: string, cohortId: string, ro
       fileType: true,
       fileUrl: true,
       createdAt: true,
-      removedAt: true,
+      ...(role === 'ADMIN' ? { removedAt: true } : {}),
     },
     orderBy: { createdAt: 'desc' },
   });
