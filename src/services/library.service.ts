@@ -282,3 +282,62 @@ export async function removeMaterial(tutorId: string, materialId: string) {
   });
   return { id: materialId, removed: true };
 }
+
+export async function adminLibraryActivity(q?: string) {
+  const term = (q ?? '').trim();
+  const userMatch = {
+    OR: [
+      { email: { contains: term, mode: 'insensitive' as const } },
+      { phone: { contains: term } },
+      { name: { contains: term, mode: 'insensitive' as const } },
+    ],
+  };
+  const where = term
+    ? {
+        OR: [
+          { cohort: { tutor: { user: userMatch } } },
+          { cohort: { memberships: { some: { student: { user: userMatch } } } } },
+        ],
+      }
+    : {};
+  const userSelect = { select: { name: true, email: true, phone: true } };
+
+  const rows = await prisma.libraryMaterial.findMany({
+    where,
+    orderBy: { createdAt: 'desc' },
+    take: 200,
+    select: {
+      id: true,
+      title: true,
+      fileType: true,
+      fileUrl: true,
+      createdAt: true,
+      removedAt: true,
+      cohortId: true,
+      cohort: {
+        select: {
+          tutor: { select: { user: userSelect } },
+          memberships: { select: { student: { select: { user: userSelect } } }, take: 10 },
+        },
+      },
+    },
+  });
+
+  const lastEvent = (r: { createdAt: Date; removedAt: Date | null }) =>
+    (r.removedAt ?? r.createdAt).getTime();
+  const sorted = [...rows].sort((a, b) => lastEvent(b) - lastEvent(a)).slice(0, 100);
+
+  return Promise.all(
+    sorted.map(async (r) => ({
+      id: r.id,
+      title: r.title,
+      fileType: r.fileType,
+      cohortId: r.cohortId,
+      createdAt: r.createdAt,
+      removedAt: r.removedAt,
+      fileUrl: r.fileUrl ? await storageGetSignedUrl(toStorageKey(r.fileUrl), 3600) : null,
+      tutor: r.cohort?.tutor?.user ?? null,
+      students: (r.cohort?.memberships ?? []).map((m) => m.student.user),
+    })),
+  );
+}
