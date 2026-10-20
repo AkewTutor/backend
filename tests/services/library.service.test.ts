@@ -17,6 +17,7 @@ vi.mock('../../src/config/db.js', () => ({
       findMany: vi.fn(),
       findUnique: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
     },
     scheduledSession: { findMany: vi.fn() },
     recordingConsent: { findMany: vi.fn() },
@@ -506,5 +507,60 @@ describe('removeMaterial', () => {
     });
 
     await expect(removeMaterial(TUTOR_ID, MATERIAL_ID)).rejects.toMatchObject({ statusCode: 404 });
+  });
+});
+
+describe('listCohortMaterials visibility', () => {
+  beforeEach(resetMocks);
+
+  it('ADMIN sees removed materials (removedAt included) and no storage check runs', async () => {
+    const client = await import('../../src/utils/providers/storage.client.js');
+    (prisma.libraryMaterial.findMany as any).mockResolvedValue([
+      {
+        id: MATERIAL_ID,
+        title: 'Gone',
+        fileType: 'PDF',
+        fileUrl: 'library/c1/gone.pdf',
+        removedAt: new Date('2026-10-01'),
+      },
+    ]);
+    (storageGetSignedUrl as any).mockImplementation(async (k: string) => 'https://signed/' + k);
+
+    const result = await listCohortMaterials(ADMIN_ID, COHORT_ID, 'ADMIN');
+
+    expect(prisma.libraryMaterial.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { cohortId: COHORT_ID } }),
+    );
+    expect(result).toHaveLength(1);
+    expect(result[0].removedAt).toBeTruthy();
+    expect(client.objectExists).not.toHaveBeenCalled();
+  });
+
+  it('student: removed rows are excluded and files missing from storage are hidden and soft-removed', async () => {
+    const client = await import('../../src/utils/providers/storage.client.js');
+    (prisma.cohortMembership.findFirst as any).mockResolvedValue({ id: 'mem-1' });
+    (prisma.libraryMaterial.findMany as any).mockResolvedValue([
+      { id: 'm-ok', title: 'Ok', fileType: 'PDF', fileUrl: 'library/c1/ok.pdf', removedAt: null },
+      {
+        id: 'm-gone',
+        title: 'Gone',
+        fileType: 'PDF',
+        fileUrl: 'library/c1/gone.pdf',
+        removedAt: null,
+      },
+    ]);
+    (client.objectExists as any).mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+    (storageGetSignedUrl as any).mockImplementation(async (k: string) => 'https://signed/' + k);
+
+    const result = await listCohortMaterials('student-1', COHORT_ID, 'STUDENT');
+
+    expect(prisma.libraryMaterial.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { cohortId: COHORT_ID, removedAt: null } }),
+    );
+    expect(result.map((m: { id: string }) => m.id)).toEqual(['m-ok']);
+    expect(prisma.libraryMaterial.updateMany).toHaveBeenCalledWith({
+      where: { id: { in: ['m-gone'] } },
+      data: { removedAt: expect.any(Date) },
+    });
   });
 });
