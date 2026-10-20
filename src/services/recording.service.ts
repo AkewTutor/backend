@@ -1,7 +1,11 @@
 ﻿import { prisma } from '../config/db.js';
 import ApiError from '../utils/ApiError.js';
 import { getConsentStatus } from './recordingConsent.service.js';
-import { upload, getSignedUrl as storageGetSignedUrl } from '../utils/providers/storage.client.js';
+import {
+  upload,
+  getSignedUrl as storageGetSignedUrl,
+  objectExists,
+} from '../utils/providers/storage.client.js';
 
 export async function uploadRecording(tutorId: string, sessionId: string, buffer: Buffer) {
   const session = await prisma.scheduledSession.findUnique({
@@ -66,6 +70,15 @@ export async function getSignedUrl(callerId: string, recordingId: string) {
 
   if (!membership) {
     throw new ApiError(403, 'Not authorized to access this recording');
+  }
+
+  const present = await objectExists(recording.storageKey);
+  if (present === false) {
+    await prisma.recording.update({
+      where: { id: recordingId },
+      data: { deletedAt: new Date() },
+    });
+    throw new ApiError(404, 'Recording no longer available');
   }
 
   const signedUrl = await storageGetSignedUrl(recording.storageKey, 900);
