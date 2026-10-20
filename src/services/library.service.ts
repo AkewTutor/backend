@@ -3,6 +3,7 @@ import ApiError from '../utils/ApiError.js';
 import {
   upload as storageUpload,
   getSignedUrl as storageGetSignedUrl,
+  objectExists,
 } from '../utils/providers/storage.client.js';
 
 const LEGACY_FILE_URL_PREFIX = 'https://r2.akewtutor.com/';
@@ -148,10 +149,21 @@ export async function listCohortMaterials(callerId: string, cohortId: string, ro
     select: { id: true, title: true, fileType: true, fileUrl: true, createdAt: true },
     orderBy: { createdAt: 'desc' },
   });
+  const present = await Promise.all(
+    materials.map((m) => (m.fileUrl ? objectExists(toStorageKey(m.fileUrl)) : true)),
+  );
+  const missingIds = materials.filter((_, i) => present[i] === false).map((m) => m.id);
+  if (missingIds.length > 0) {
+    await prisma.libraryMaterial.updateMany({
+      where: { id: { in: missingIds } },
+      data: { removedAt: new Date() },
+    });
+  }
+  const liveMaterials = materials.filter((_, i) => present[i] !== false);
   // fileUrl holds the storage key (older rows hold the legacy r2.akewtutor.com URL);
   // hand back a short-lived signed download URL instead.
   return Promise.all(
-    materials.map(async (m) => ({
+    liveMaterials.map(async (m) => ({
       ...m,
       fileUrl: m.fileUrl ? await storageGetSignedUrl(toStorageKey(m.fileUrl), 3600) : m.fileUrl,
       downloadUrl: m.fileUrl
