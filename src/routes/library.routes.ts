@@ -4,6 +4,7 @@ import validate from '../middlewares/validate.middleware.js';
 import multer from 'multer';
 import ApiError from '../utils/ApiError.js';
 import { uploadMaterialSchema } from '../schemas/library.schema.js';
+import { remove as removeController } from '../controllers/library.controller.js';
 import {
   upload as uploadController,
   listForCohort,
@@ -61,6 +62,7 @@ libraryRouter.post(
   uploadController,
 );
 libraryRouter.get('/cohorts/:cohortId/materials', listForCohort);
+libraryRouter.delete('/materials/:id', requireRole('TUTOR'), removeController);
 
 export const adminLibraryRouter = Router();
 adminLibraryRouter.use(authMiddleware, requireRole('ADMIN'));
