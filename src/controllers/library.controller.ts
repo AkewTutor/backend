@@ -82,3 +82,13 @@ export const remove = async (req: Request, res: Response, next: NextFunction) =>
     next(error);
   }
 };
+
+export const adminActivity = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const q = typeof req.query.q === 'string' ? req.query.q : undefined;
+    const items = await libraryService.adminLibraryActivity(q);
+    res.status(HTTP_STATUS.OK).json(new SuccessResponse(HTTP_STATUS.OK, 'OK', { items }));
+  } catch (error) {
+    next(error);
+  }
+};
