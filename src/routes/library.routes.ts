@@ -4,6 +4,7 @@ import validate from '../middlewares/validate.middleware.js';
 import multer from 'multer';
 import ApiError from '../utils/ApiError.js';
 import { uploadMaterialSchema } from '../schemas/library.schema.js';
+import { adminActivity as adminActivityController } from '../controllers/library.controller.js';
 import { remove as removeController } from '../controllers/library.controller.js';
 import {
   upload as uploadController,
@@ -68,3 +69,4 @@ export const adminLibraryRouter = Router();
 adminLibraryRouter.use(authMiddleware, requireRole('ADMIN'));
 adminLibraryRouter.patch('/materials/:id', adminOverride);
 adminLibraryRouter.get('/recording-compliance', adminRecordingCompliance);
+adminLibraryRouter.get('/activity', adminActivityController);
