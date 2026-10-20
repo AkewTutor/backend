@@ -39,9 +39,12 @@ export async function upload(key: string, body: Buffer, contentType: string) {
   return { storageKey: sanitizedKey };
 }
 
-export async function getSignedUrl(key: string, expiresIn: number) {
+export async function getSignedUrl(key: string, expiresIn: number, downloadName?: string) {
   const sanitizedKey = key.replace(/\.\.\//g, '').replace(/^\/+/, '');
   const command = new GetObjectCommand({
+    ResponseContentDisposition: downloadName
+      ? 'attachment; filename="' + downloadName.replace(/[^\w. -]/g, '_') + '"'
+      : undefined,
     Bucket: process.env.STORAGE_BUCKET || 'akewtutor',
     Key: sanitizedKey,
   });
