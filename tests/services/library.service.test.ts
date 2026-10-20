@@ -459,3 +459,51 @@ describe('material file URLs', () => {
     expect(result[1].fileUrl).toBe('https://signed/library/c1/2-PDF');
   });
 });
+
+describe('removeMaterial', () => {
+  beforeEach(resetMocks);
+
+  it('assigned tutor soft-removes the material', async () => {
+    const { removeMaterial } = await import('../../src/services/library.service.js');
+    (prisma.libraryMaterial.findUnique as any).mockResolvedValue({
+      id: MATERIAL_ID,
+      cohortId: COHORT_ID,
+      removedAt: null,
+    });
+    (prisma.cohort.findUnique as any).mockResolvedValue({ id: COHORT_ID, tutorId: TUTOR_ID });
+    (prisma.libraryMaterial.update as any).mockResolvedValue({});
+
+    await expect(removeMaterial(TUTOR_ID, MATERIAL_ID)).resolves.toEqual({
+      id: MATERIAL_ID,
+      removed: true,
+    });
+    expect(prisma.libraryMaterial.update).toHaveBeenCalledWith({
+      where: { id: MATERIAL_ID },
+      data: { removedAt: expect.any(Date) },
+    });
+  });
+
+  it('a different tutor is rejected with 403', async () => {
+    const { removeMaterial } = await import('../../src/services/library.service.js');
+    (prisma.libraryMaterial.findUnique as any).mockResolvedValue({
+      id: MATERIAL_ID,
+      cohortId: COHORT_ID,
+      removedAt: null,
+    });
+    (prisma.cohort.findUnique as any).mockResolvedValue({ id: COHORT_ID, tutorId: 'other-tutor' });
+
+    await expect(removeMaterial(TUTOR_ID, MATERIAL_ID)).rejects.toMatchObject({ statusCode: 403 });
+    expect(prisma.libraryMaterial.update).not.toHaveBeenCalled();
+  });
+
+  it('missing or already removed material is 404', async () => {
+    const { removeMaterial } = await import('../../src/services/library.service.js');
+    (prisma.libraryMaterial.findUnique as any).mockResolvedValue({
+      id: MATERIAL_ID,
+      cohortId: COHORT_ID,
+      removedAt: new Date(),
+    });
+
+    await expect(removeMaterial(TUTOR_ID, MATERIAL_ID)).rejects.toMatchObject({ statusCode: 404 });
+  });
+});
