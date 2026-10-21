@@ -6,6 +6,7 @@ import {
   updateQuizSchema,
   quizIdParamSchema,
   attemptIdParamSchema,
+  historyQuerySchema,
   submitAttemptSchema,
 } from '../schemas/assessmentQuiz.schema.js';
 import {
@@ -15,6 +16,7 @@ import {
   resetAttempt,
   listForCohort,
   submitAttempt,
+  getHistory,
 } from '../controllers/assessmentQuiz.controller.js';
 
 const router = Router();
@@ -22,6 +24,7 @@ router.use(authMiddleware);
 
 router.post('/', requireRole('TUTOR'), validate(createQuizSchema), createQuiz);
 router.get('/cohort/:cohortId', requireRole('TUTOR', 'STUDENT'), listForCohort);
+router.get('/history', requireRole('ADMIN', 'PARENT'), validate(historyQuerySchema), getHistory);
 router.post(
   '/attempts/:attemptId/reset',
   requireRole('TUTOR'),
@@ -33,6 +36,7 @@ router.post(
   requireRole('STUDENT'),
   validate(submitAttemptSchema),
   submitAttempt,
+  getHistory,
 );
 router.patch('/:quizId', requireRole('TUTOR'), validate(updateQuizSchema), updateQuiz);
 router.delete('/:quizId', requireRole('TUTOR'), validate(quizIdParamSchema), deleteQuiz);
