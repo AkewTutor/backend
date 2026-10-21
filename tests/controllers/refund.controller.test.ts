@@ -122,4 +122,34 @@ describe('refund.controller.ts', () => {
     );
     expect(res.status).toHaveBeenCalledWith(200);
   });
+
+  it('adminReview adds student and tutor names (User.name, else email) and strips the payment relation', async () => {
+    (prisma.refund.findMany as any).mockResolvedValue([
+      {
+        id: 'refund-1',
+        status: 'PENDING',
+        amount: '300.00',
+        payment: {
+          cohortMembership: {
+            student: { user: { name: 'Sara Bekele', email: 's6@test.local' } },
+            cohort: { tutor: { user: { name: null, email: 't3@test.local' } } },
+          },
+        },
+      },
+    ]);
+    const req = mockReq({ user: { id: 'admin-1', role: 'ADMIN' } as any, query: {} });
+    const res = mockRes();
+
+    await adminReview(req, res, vi.fn());
+
+    const body = (res.json as any).mock.calls[0][0];
+    expect(body.data[0]).toMatchObject({
+      id: 'refund-1',
+      studentName: 'Sara Bekele',
+      studentEmail: 's6@test.local',
+      tutorName: 't3@test.local',
+      tutorEmail: 't3@test.local',
+    });
+    expect(body.data[0].payment).toBeUndefined();
+  });
 });
