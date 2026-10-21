@@ -1085,6 +1085,7 @@ model AssessmentQuiz {
   title            String?
   instructions     String
   questions        Json
+  deletedAt        DateTime?
   createdByTutorId String
   createdAt        DateTime @default(now())
 
@@ -1092,7 +1093,7 @@ model AssessmentQuiz {
   createdBy TutorProfile        @relation(fields: [createdByTutorId], references: [id])
   attempts  AssessmentAttempt[]
 
-  @@unique([cohortId, weekStartDate])
+  @@index([cohortId, weekStartDate])
 }
 
 model AssessmentAttempt {
@@ -1100,6 +1101,7 @@ model AssessmentAttempt {
   quizId             String
   cohortMembershipId String
   answers            Json
+  supersededAt       DateTime?
   score              Int
   total              Int
   submittedAt        DateTime @default(now())
@@ -1107,5 +1109,5 @@ model AssessmentAttempt {
   quiz             AssessmentQuiz   @relation(fields: [quizId], references: [id])
   cohortMembership CohortMembership @relation(fields: [cohortMembershipId], references: [id])
 
-  @@unique([quizId, cohortMembershipId])
+  @@index([quizId, cohortMembershipId])
 }
