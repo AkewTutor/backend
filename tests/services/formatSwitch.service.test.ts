@@ -45,6 +45,7 @@ vi.mock('../../src/services/matching.service.js', () => ({
 
 vi.mock('../../src/services/refund.service.js', () => ({
   createPendingRefund: vi.fn(),
+  calculateProration: vi.fn(),
 }));
 
 vi.mock('../../src/services/notification.service.js', () => ({
@@ -75,6 +76,11 @@ function activeMembership(overrides: Record<string, unknown> = {}) {
 
 function resetAllMocks() {
   vi.clearAllMocks();
+  (refundService.calculateProration as any).mockResolvedValue({
+    sessionsRemaining: 0,
+    totalSessionsBilled: 8,
+    amount: '0.00',
+  });
   (dispatchNotification as any).mockResolvedValue(undefined);
   (prisma.cohortMembership.update as any).mockResolvedValue({ id: membershipId, status: 'ENDED' });
 }
@@ -84,10 +90,11 @@ describe('requestSwitch', () => {
 
   it('successful switch from 1-to-1 to 1-to-3', async () => {
     (prisma.cohortMembership.findFirst as any).mockResolvedValue(activeMembership());
-    (prisma.payment.findFirst as any).mockResolvedValue({
-      id: paymentId,
+    (prisma.payment.findFirst as any).mockResolvedValue({ id: paymentId });
+    (refundService.calculateProration as any).mockResolvedValue({
       sessionsRemaining: 3,
       totalSessionsBilled: 8,
+      amount: '200.00',
     });
     (matchingService.createMatchRequestForFormat as any).mockResolvedValue({
       id: 'new-mr',
@@ -129,10 +136,11 @@ describe('requestSwitch', () => {
 
   it('old assignment cancelled synchronously within this function, not deferred', async () => {
     (prisma.cohortMembership.findFirst as any).mockResolvedValue(activeMembership());
-    (prisma.payment.findFirst as any).mockResolvedValue({
-      id: paymentId,
+    (prisma.payment.findFirst as any).mockResolvedValue({ id: paymentId });
+    (refundService.calculateProration as any).mockResolvedValue({
       sessionsRemaining: 0,
       totalSessionsBilled: 8,
+      amount: '200.00',
     });
     (matchingService.createMatchRequestForFormat as any).mockResolvedValue({
       id: 'new-mr',
@@ -150,10 +158,11 @@ describe('requestSwitch', () => {
     (prisma.cohortMembership.findFirst as any).mockResolvedValue(
       activeMembership({ cohort: { id: cohortId, format: 'ONE_TO_THREE' } }),
     );
-    (prisma.payment.findFirst as any).mockResolvedValue({
-      id: paymentId,
+    (prisma.payment.findFirst as any).mockResolvedValue({ id: paymentId });
+    (refundService.calculateProration as any).mockResolvedValue({
       sessionsRemaining: 0,
       totalSessionsBilled: 8,
+      amount: '200.00',
     });
     (matchingService.createMatchRequestForFormat as any).mockResolvedValue({
       id: 'new-mr',
@@ -169,10 +178,11 @@ describe('requestSwitch', () => {
 
   it('re-enters matching via Path C for a group destination format', async () => {
     (prisma.cohortMembership.findFirst as any).mockResolvedValue(activeMembership());
-    (prisma.payment.findFirst as any).mockResolvedValue({
-      id: paymentId,
+    (prisma.payment.findFirst as any).mockResolvedValue({ id: paymentId });
+    (refundService.calculateProration as any).mockResolvedValue({
       sessionsRemaining: 0,
       totalSessionsBilled: 8,
+      amount: '200.00',
     });
     (matchingService.createMatchRequestForFormat as any).mockResolvedValue({
       id: 'new-mr',
@@ -188,10 +198,11 @@ describe('requestSwitch', () => {
 
   it('refund is null when there were zero remaining paid sessions', async () => {
     (prisma.cohortMembership.findFirst as any).mockResolvedValue(activeMembership());
-    (prisma.payment.findFirst as any).mockResolvedValue({
-      id: paymentId,
+    (prisma.payment.findFirst as any).mockResolvedValue({ id: paymentId });
+    (refundService.calculateProration as any).mockResolvedValue({
       sessionsRemaining: 0,
       totalSessionsBilled: 8,
+      amount: '200.00',
     });
     (matchingService.createMatchRequestForFormat as any).mockResolvedValue({
       id: 'new-mr',
@@ -208,10 +219,11 @@ describe('requestSwitch', () => {
     (prisma.cohortMembership.findFirst as any).mockResolvedValue(
       activeMembership({ cohort: { id: cohortId, format: 'ONE_TO_FIVE' } }),
     );
-    (prisma.payment.findFirst as any).mockResolvedValue({
-      id: paymentId,
+    (prisma.payment.findFirst as any).mockResolvedValue({ id: paymentId });
+    (refundService.calculateProration as any).mockResolvedValue({
       sessionsRemaining: 0,
       totalSessionsBilled: 8,
+      amount: '200.00',
     });
     (matchingService.createMatchRequestForFormat as any).mockResolvedValue({
       id: 'new-mr',
@@ -227,10 +239,11 @@ describe('requestSwitch', () => {
 
   it('outgoing tutor notified with non-punitive, student-initiated framing', async () => {
     (prisma.cohortMembership.findFirst as any).mockResolvedValue(activeMembership());
-    (prisma.payment.findFirst as any).mockResolvedValue({
-      id: paymentId,
+    (prisma.payment.findFirst as any).mockResolvedValue({ id: paymentId });
+    (refundService.calculateProration as any).mockResolvedValue({
       sessionsRemaining: 0,
       totalSessionsBilled: 8,
+      amount: '200.00',
     });
     (matchingService.createMatchRequestForFormat as any).mockResolvedValue({
       id: 'new-mr',
@@ -245,10 +258,11 @@ describe('requestSwitch', () => {
 
   it('refund amount uses the sessions-delivered proration formula, handed off via refund.service, left PENDING', async () => {
     (prisma.cohortMembership.findFirst as any).mockResolvedValue(activeMembership());
-    (prisma.payment.findFirst as any).mockResolvedValue({
-      id: paymentId,
+    (prisma.payment.findFirst as any).mockResolvedValue({ id: paymentId });
+    (refundService.calculateProration as any).mockResolvedValue({
       sessionsRemaining: 4,
       totalSessionsBilled: 8,
+      amount: '200.00',
     });
     (matchingService.createMatchRequestForFormat as any).mockResolvedValue({
       id: 'new-mr',
