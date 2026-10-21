@@ -36,6 +36,15 @@ function studentName(student: any): string {
   );
 }
 
+function tutorName(tutor: any): string {
+  return (
+    String(tutor?.user?.name ?? '').trim() ||
+    String(tutor?.firstName ?? '').trim() ||
+    tutor?.user?.email ||
+    'Tutor'
+  );
+}
+
 async function findOwnedQuiz(tutorId: string, quizId: string) {
   const quiz = await prisma.assessmentQuiz.findFirst({
     where: { id: quizId, deletedAt: null },
@@ -249,4 +258,61 @@ export async function submitAttempt(studentId: string, quizId: string, answers: 
     answers,
     questions,
   };
+}
+
+// ADMIN: every student (optional search). PARENT: only linked ACTIVE children.
+// Includes reset attempts and attempts on deleted quizzes (history is never lost).
+export async function getAssessmentHistory(
+  callerId: string,
+  role: string,
+  filters: { q?: string; studentId?: string },
+) {
+  if (role !== 'ADMIN' && role !== 'PARENT') throw new ApiError(403, 'Not authorized');
+
+  const studentWhere: any = {};
+  if (role === 'PARENT') {
+    studentWhere.guardianRelationships = { some: { parentId: callerId, status: 'ACTIVE' } };
+  }
+  if (filters.q) {
+    studentWhere.user = {
+      OR: [
+        { email: { contains: filters.q, mode: 'insensitive' } },
+        { phone: { contains: filters.q } },
+        { name: { contains: filters.q, mode: 'insensitive' } },
+      ],
+    };
+  }
+
+  const attempts = await prisma.assessmentAttempt.findMany({
+    where: {
+      cohortMembership: {
+        ...(filters.studentId ? { studentId: filters.studentId } : {}),
+        student: studentWhere,
+      },
+    },
+    orderBy: { submittedAt: 'desc' },
+    take: 200,
+    include: {
+      quiz: { include: { cohort: { include: { tutor: { include: { user: true } } } } } },
+      cohortMembership: { include: { student: { include: { user: true } } } },
+    },
+  });
+
+  return attempts.map((a) => ({
+    attemptId: a.id,
+    studentId: a.cohortMembership.studentId,
+    studentName: studentName(a.cohortMembership.student),
+    studentEmail: (a.cohortMembership.student as any)?.user?.email ?? null,
+    cohortId: a.quiz.cohortId,
+    quizId: a.quizId,
+    quizTitle: a.quiz.title,
+    weekStartDate: a.quiz.weekStartDate,
+    quizDeleted: a.quiz.deletedAt !== null,
+    tutorName: tutorName((a.quiz as any).cohort?.tutor),
+    tutorEmail: (a.quiz as any).cohort?.tutor?.user?.email ?? null,
+    score: a.score,
+    total: a.total,
+    submittedAt: a.submittedAt,
+    supersededAt: a.supersededAt,
+  }));
 }
