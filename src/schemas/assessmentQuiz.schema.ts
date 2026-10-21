@@ -24,6 +24,28 @@ export const createQuizSchema = z.object({
   }),
 });
 
+export const updateQuizSchema = z.object({
+  params: z.object({ quizId: z.string().uuid() }),
+  body: z
+    .object({
+      title: z.string().trim().max(120).optional(),
+      instructions: z.string().trim().min(1, 'Instructions are required').optional(),
+      questions: z.array(questionSchema).min(1).max(50).optional(),
+    })
+    .refine(
+      (b) => b.title !== undefined || b.instructions !== undefined || b.questions !== undefined,
+      { message: 'Nothing to update' },
+    ),
+});
+
+export const quizIdParamSchema = z.object({
+  params: z.object({ quizId: z.string().uuid() }),
+});
+
+export const attemptIdParamSchema = z.object({
+  params: z.object({ attemptId: z.string().uuid() }),
+});
+
 export const submitAttemptSchema = z.object({
   params: z.object({ quizId: z.string().uuid() }),
   body: z.object({
