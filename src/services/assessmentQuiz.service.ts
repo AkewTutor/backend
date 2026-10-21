@@ -26,7 +26,14 @@ function hideAnswers(questions: QuizQuestion[]) {
 }
 
 function studentName(student: any): string {
-  return student?.firstName ?? String(student?.user?.name ?? '').split(' ')[0];
+  return (
+    String(student?.firstName ?? '').trim() ||
+    String(student?.user?.name ?? '')
+      .trim()
+      .split(' ')[0] ||
+    student?.user?.email ||
+    'Student'
+  );
 }
 
 async function findOwnedQuiz(tutorId: string, quizId: string) {
