@@ -36,7 +36,6 @@ router.post(
   requireRole('STUDENT'),
   validate(submitAttemptSchema),
   submitAttempt,
-  getHistory,
 );
 router.patch('/:quizId', requireRole('TUTOR'), validate(updateQuizSchema), updateQuiz);
 router.delete('/:quizId', requireRole('TUTOR'), validate(quizIdParamSchema), deleteQuiz);
