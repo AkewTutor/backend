@@ -16,6 +16,36 @@ export const createQuiz = async (req: Request, res: Response, next: NextFunction
   }
 };
 
+export const updateQuiz = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const callerId = await resolveCallerProfileId((req as any).user);
+    const result = await quizService.updateQuiz(callerId, req.params.quizId as string, req.body);
+    res.status(HTTP_STATUS.OK).json(new SuccessResponse(HTTP_STATUS.OK, 'OK', result));
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const deleteQuiz = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const callerId = await resolveCallerProfileId((req as any).user);
+    const result = await quizService.deleteQuiz(callerId, req.params.quizId as string);
+    res.status(HTTP_STATUS.OK).json(new SuccessResponse(HTTP_STATUS.OK, 'OK', result));
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const resetAttempt = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const callerId = await resolveCallerProfileId((req as any).user);
+    const result = await quizService.resetAttempt(callerId, req.params.attemptId as string);
+    res.status(HTTP_STATUS.OK).json(new SuccessResponse(HTTP_STATUS.OK, 'OK', result));
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const listForCohort = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const user = (req as any).user;
