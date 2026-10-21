@@ -27,7 +27,7 @@ export async function requestSwitch(
 
   // Payment is linked to the membership, not the student
   const payment = await (prisma as any).payment.findFirst({
-    where: { cohortMembershipId: membership.id },
+    where: { cohortMembershipId: membership.id, status: 'SUCCESS' },
     orderBy: { createdAt: 'desc' },
   });
 
@@ -46,7 +46,10 @@ export async function requestSwitch(
   });
 
   let refundId = null;
-  if (payment && (payment as any).sessionsRemaining > 0) {
+  const proration = payment
+    ? await refundService.calculateProration(payment.id, 'FORMAT_SWITCH')
+    : null;
+  if (payment && proration && proration.sessionsRemaining > 0) {
     const refund = await refundService.createPendingRefund(payment.id, 'FORMAT_SWITCH');
     refundId = refund ? refund.id : null;
   }

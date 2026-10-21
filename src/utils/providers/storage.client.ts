@@ -1,4 +1,9 @@
-import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+import {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+  HeadObjectCommand,
+} from '@aws-sdk/client-s3';
 import { getSignedUrl as presignUrl } from '@aws-sdk/s3-request-presigner';
 
 function resolveRegion(): string {
@@ -34,12 +39,34 @@ export async function upload(key: string, body: Buffer, contentType: string) {
   return { storageKey: sanitizedKey };
 }
 
-export async function getSignedUrl(key: string, expiresIn: number) {
+export async function getSignedUrl(key: string, expiresIn: number, downloadName?: string) {
   const sanitizedKey = key.replace(/\.\.\//g, '').replace(/^\/+/, '');
   const command = new GetObjectCommand({
+    ResponseContentDisposition: downloadName
+      ? 'attachment; filename="' + downloadName.replace(/[^\w. -]/g, '_') + '"'
+      : undefined,
     Bucket: process.env.STORAGE_BUCKET || 'akewtutor',
     Key: sanitizedKey,
   });
 
   return presignUrl(s3Client, command, { expiresIn });
+}
+
+export async function objectExists(key: string): Promise<boolean> {
+  const sanitizedKey = key.replace(/\.\.\//g, '').replace(/^\/+/, '');
+  try {
+    await s3Client.send(
+      new HeadObjectCommand({
+        Bucket: process.env.STORAGE_BUCKET || 'akewtutor',
+        Key: sanitizedKey,
+      }),
+    );
+    return true;
+  } catch (err) {
+    const e = err as { name?: string; $metadata?: { httpStatusCode?: number } };
+    if (e.name === 'NotFound' || e.name === 'NoSuchKey' || e.$metadata?.httpStatusCode === 404) {
+      return false;
+    }
+    return true;
+  }
 }

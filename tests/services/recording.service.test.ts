@@ -1,23 +1,24 @@
 /**
  * tests/services/recording.service.test.ts
  *
- * Journey step 4.10. Spec: `09-4-class-delivery-library.md` §9.9.
- * FRs: FR-SP-035–037, FR-CD-004–008. Section 5.8 (90-day retention, 720p).
- * OWASP: A01:2021 – Broken Access Control (central risk — cross-student/
- * cross-cohort recording access), A04:2021 – Insecure Design (consent-gating
+ * Journey step 4.10. Spec: `09-4-class-delivery-library.md` Â§9.9.
+ * FRs: FR-SP-035â€“037, FR-CD-004â€“008. Section 5.8 (90-day retention, 720p).
+ * OWASP: A01:2021 â€“ Broken Access Control (central risk â€” cross-student/
+ * cross-cohort recording access), A04:2021 â€“ Insecure Design (consent-gating
  * is a design-level safety control).
  *
- * Mocks Prisma, `recordingConsent.service.ts`, and `storage.client.ts` — per
- * the Test File Map (§9.1), which orders this file after both of those.
+ * Mocks Prisma, `recordingConsent.service.ts`, and `storage.client.ts` â€” per
+ * the Test File Map (Â§9.1), which orders this file after both of those.
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../src/config/db.js', () => ({
   prisma: {
-    scheduledSession: { findUnique: vi.fn() },
+    scheduledSession: { findUnique: vi.fn(), findMany: vi.fn() },
     cohortMembership: { findMany: vi.fn(), findFirst: vi.fn() },
     recording: {
+      findMany: vi.fn(),
       findUnique: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
@@ -32,6 +33,7 @@ vi.mock('../../src/services/recordingConsent.service.js', () => ({
 vi.mock('../../src/utils/providers/storage.client.js', () => ({
   upload: vi.fn(),
   getSignedUrl: vi.fn(),
+  objectExists: vi.fn().mockResolvedValue(true),
 }));
 
 vi.mock('../../src/services/sessionMiss.service.js', () => ({
@@ -76,7 +78,7 @@ function resetMocks() {
 describe('uploadRecording', () => {
   beforeEach(resetMocks);
 
-  it('succeeds for a fully-consented 1-to-1 pairing — expiresAt is upload time + 90 days, keepPermanently false', async () => {
+  it('succeeds for a fully-consented 1-to-1 pairing â€” expiresAt is upload time + 90 days, keepPermanently false', async () => {
     (prisma.scheduledSession.findUnique as any).mockResolvedValue({
       id: SESSION_ID,
       cohortId: COHORT_ID,
@@ -99,7 +101,7 @@ describe('uploadRecording', () => {
     expect(daysDiff).toBeLessThan(90.1);
   });
 
-  it('blocked — 1-to-1 pairing consent incomplete throws ApiError(409, ...)', async () => {
+  it('blocked â€” 1-to-1 pairing consent incomplete throws ApiError(409, ...)', async () => {
     (prisma.scheduledSession.findUnique as any).mockResolvedValue({
       id: SESSION_ID,
       cohortId: COHORT_ID,
@@ -117,7 +119,7 @@ describe('uploadRecording', () => {
     });
   });
 
-  it('1-to-3/1-to-5 blocked if ANY active member pairing is incomplete — the any-one-incomplete-blocks-all case (2 of 3 complete, 1 incomplete)', async () => {
+  it('1-to-3/1-to-5 blocked if ANY active member pairing is incomplete â€” the any-one-incomplete-blocks-all case (2 of 3 complete, 1 incomplete)', async () => {
     (prisma.scheduledSession.findUnique as any).mockResolvedValue({
       id: SESSION_ID,
       cohortId: COHORT_ID,
@@ -192,7 +194,7 @@ describe('uploadRecording', () => {
     });
   });
 
-  it('stores at 720p — the storage/encoding call specifies the 720p compressed target', async () => {
+  it('stores at 720p â€” the storage/encoding call specifies the 720p compressed target', async () => {
     (prisma.scheduledSession.findUnique as any).mockResolvedValue({
       id: SESSION_ID,
       cohortId: COHORT_ID,
@@ -215,7 +217,7 @@ describe('uploadRecording', () => {
 describe('getSignedUrl (recording playback)', () => {
   beforeEach(resetMocks);
 
-  it('a cohort member retrieves their own recording — resolves { signedUrl, expiresIn: 900 }', async () => {
+  it('a cohort member retrieves their own recording â€” resolves { signedUrl, expiresIn: 900 }', async () => {
     (prisma.recording.findUnique as any).mockResolvedValue({
       id: RECORDING_ID,
       sessionId: SESSION_ID,
@@ -234,7 +236,7 @@ describe('getSignedUrl (recording playback)', () => {
     expect(presignerCallArgs[1]).toBe(900);
   });
 
-  it("cross-student access denied (IDOR/BOLA) — caller has zero CohortMembership rows for this recording's cohort, ever", async () => {
+  it("cross-student access denied (IDOR/BOLA) â€” caller has zero CohortMembership rows for this recording's cohort, ever", async () => {
     (prisma.recording.findUnique as any).mockResolvedValue({
       id: RECORDING_ID,
       sessionId: SESSION_ID,
@@ -263,7 +265,7 @@ describe('getSignedUrl (recording playback)', () => {
       deletedAt: null,
       session: { cohortId: COHORT_B_ID },
     });
-    // Caller is a genuine member of Cohort A — the lookup is scoped to
+    // Caller is a genuine member of Cohort A â€” the lookup is scoped to
     // Cohort B (this recording's real cohort), so it correctly finds nothing.
     (prisma.cohortMembership.findFirst as any).mockResolvedValue(null);
 
@@ -275,7 +277,7 @@ describe('getSignedUrl (recording playback)', () => {
     expect(JSON.stringify(findFirstArg)).toContain(COHORT_B_ID);
   });
 
-  it('past retention, not kept permanently — throws ApiError(404, "Recording no longer available")', async () => {
+  it('past retention, not kept permanently â€” throws ApiError(404, "Recording no longer available")', async () => {
     (prisma.recording.findUnique as any).mockResolvedValue({
       id: RECORDING_ID,
       sessionId: SESSION_ID,
@@ -293,7 +295,7 @@ describe('getSignedUrl (recording playback)', () => {
     });
   });
 
-  it('past retention but kept permanently — resolves successfully, retention does not apply', async () => {
+  it('past retention but kept permanently â€” resolves successfully, retention does not apply', async () => {
     (prisma.recording.findUnique as any).mockResolvedValue({
       id: RECORDING_ID,
       sessionId: SESSION_ID,
@@ -326,7 +328,7 @@ describe('getSignedUrl (recording playback)', () => {
     });
   });
 
-  it('a tutor retrieves a recording for their own past student — resolves successfully', async () => {
+  it('a tutor retrieves a recording for their own past student â€” resolves successfully', async () => {
     (prisma.recording.findUnique as any).mockResolvedValue({
       id: RECORDING_ID,
       sessionId: SESSION_ID,
@@ -363,7 +365,7 @@ describe('keepPermanently', () => {
     expect(result).toEqual({ id: RECORDING_ID, keepPermanently: true });
   });
 
-  it('non-member attempts to mark another cohort\'s recording (IDOR) — ApiError(403, "Not authorized to modify this recording")', async () => {
+  it('non-member attempts to mark another cohort\'s recording (IDOR) â€” ApiError(403, "Not authorized to modify this recording")', async () => {
     (prisma.recording.findUnique as any).mockResolvedValue({
       id: RECORDING_ID,
       sessionId: SESSION_ID,
@@ -426,7 +428,10 @@ describe('flagMissing / escalateMissing', () => {
       id: SESSION_ID,
       status: 'COMPLETED',
       scheduledEnd: new Date(Date.now() - 1000 * 60 * 60 * 3),
-      recording: { id: RECORDING_ID },
+      recording: {
+        findMany: vi.fn(),
+        id: RECORDING_ID,
+      },
     });
     (prisma.scheduledSession as any).update = vi.fn();
 
@@ -451,5 +456,54 @@ describe('flagMissing / escalateMissing', () => {
     expect(recordTutorCausedMiss).not.toHaveBeenCalled();
     expect(recordStudentCausedMiss).not.toHaveBeenCalled();
     expect(createPendingRefund).not.toHaveBeenCalled();
+  });
+});
+
+describe('getMyRecordings', () => {
+  it('returns each recording with cohortId, session date and its session number in the cohort', async () => {
+    (prisma.recording.findMany as any).mockResolvedValue([
+      {
+        id: 'rec-1',
+        sessionId: 'session-2',
+        keepPermanently: false,
+        session: { cohortId: COHORT_ID, scheduledStart: new Date('2026-10-26T12:00:00Z') },
+      },
+    ]);
+    (prisma.scheduledSession.findMany as any).mockResolvedValue([
+      { id: 'session-1', cohortId: COHORT_ID },
+      { id: 'session-2', cohortId: COHORT_ID },
+    ]);
+
+    const { getMyRecordings } = await import('../../src/services/recording.service.js');
+    const result = await getMyRecordings('student-1', {});
+
+    expect(result.recordings[0]).toMatchObject({
+      id: 'rec-1',
+      cohortId: COHORT_ID,
+      sessionNumber: 2,
+      sessionStart: new Date('2026-10-26T12:00:00Z'),
+    });
+    expect(result.recordings[0]).not.toHaveProperty('session');
+  });
+});
+
+describe('keepPermanently ownership', () => {
+  beforeEach(resetMocks);
+
+  it("a tutor cannot keep a recording permanently - the lookup is by the caller's student membership only", async () => {
+    (prisma.recording.findUnique as any).mockResolvedValue({
+      id: RECORDING_ID,
+      sessionId: SESSION_ID,
+      keepPermanently: false,
+      session: { cohortId: COHORT_ID },
+    });
+    (prisma.cohortMembership.findFirst as any).mockResolvedValue(null);
+
+    await expect(keepPermanently(TUTOR_ID, RECORDING_ID)).rejects.toMatchObject({
+      statusCode: 403,
+      message: 'Not authorized to modify this recording',
+    });
+    const where = (prisma.cohortMembership.findFirst as any).mock.calls[0][0].where;
+    expect(where).toEqual({ cohortId: COHORT_ID, studentId: TUTOR_ID });
   });
 });

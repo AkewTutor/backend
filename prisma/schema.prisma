@@ -224,6 +224,7 @@ model ParentProfile {
 }
 
 model TutorProfile {
+  assessmentQuizzes AssessmentQuiz[]
   id                    String                  @id @default(uuid())
   userId                String                  @unique
   profilePictureUrl     String?
@@ -451,6 +452,7 @@ enum MembershipStatus {
 }
 
 model Cohort {
+  assessmentQuizzes AssessmentQuiz[]
   complaints                    ComplaintReport[]
   id                            String            @id @default(uuid())
   tutorId                       String
@@ -481,6 +483,7 @@ model Cohort {
 }
 
 model CohortMembership {
+  assessmentAttempts AssessmentAttempt[]
   id                     String               @id @default(uuid())
   cohortId               String
   studentId              String
@@ -636,6 +639,7 @@ enum MaterialFileType {
   PDF
   NOTE
   BOOK
+  VIDEO
 }
 
 model ScheduledSession {
@@ -1072,4 +1076,38 @@ model ComplaintReport {
   cohort     Cohort?           @relation(fields: [relatedCohortId], references: [id])
   session    ScheduledSession? @relation(fields: [relatedSessionId], references: [id])
   payment    Payment?          @relation(fields: [relatedPaymentId], references: [id])
+}
+
+model AssessmentQuiz {
+  id               String   @id @default(uuid())
+  cohortId         String
+  weekStartDate    DateTime
+  title            String?
+  instructions     String
+  questions        Json
+  deletedAt        DateTime?
+  createdByTutorId String
+  createdAt        DateTime @default(now())
+
+  cohort    Cohort              @relation(fields: [cohortId], references: [id])
+  createdBy TutorProfile        @relation(fields: [createdByTutorId], references: [id])
+  attempts  AssessmentAttempt[]
+
+  @@index([cohortId, weekStartDate])
+}
+
+model AssessmentAttempt {
+  id                 String   @id @default(uuid())
+  quizId             String
+  cohortMembershipId String
+  answers            Json
+  supersededAt       DateTime?
+  score              Int
+  total              Int
+  submittedAt        DateTime @default(now())
+
+  quiz             AssessmentQuiz   @relation(fields: [quizId], references: [id])
+  cohortMembership CohortMembership @relation(fields: [cohortMembershipId], references: [id])
+
+  @@index([quizId, cohortMembershipId])
 }

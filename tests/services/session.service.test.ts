@@ -1,14 +1,14 @@
-/**
+﻿/**
  * tests/services/session.service.test.ts
  *
- * Journey step 4.2. Spec: `09-4-class-delivery-library.md` §9.3.
- * FRs: FR-CD-001–003, FR-CD-006, FR-AC-008 (`assertSessionAccessAllowed` —
+ * Journey step 4.2. Spec: `09-4-class-delivery-library.md` Â§9.3.
+ * FRs: FR-CD-001â€“003, FR-CD-006, FR-AC-008 (`assertSessionAccessAllowed` â€”
  * gap closed). Section 7 v3.2 cadence/billing.
- * OWASP: A01:2021 – Broken Access Control.
+ * OWASP: A01:2021 â€“ Broken Access Control.
  *
- * Unit tier — Prisma mocked. `assertAccountStatusAllowsAccess` (accounts-
+ * Unit tier â€” Prisma mocked. `assertAccountStatusAllowsAccess` (accounts-
  * guardianship's studentProfile.service.ts) is mocked as a cross-feature call
- * per feature-decomposition.md §1.1 — no FK, so it's reached via a direct
+ * per feature-decomposition.md Â§1.1 â€” no FK, so it's reached via a direct
  * service import, not a Prisma join.
  */
 
@@ -17,6 +17,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../../src/config/db.js', () => ({
   prisma: {
     cohort: {
+      findMany: vi.fn(),
       findUnique: vi.fn(),
       update: vi.fn(),
     },
@@ -87,7 +88,7 @@ describe('generateSessionsForCohort', () => {
     expect(updateArg.data.sessionsPerWeek).toBe(2);
   });
 
-  it('generates sessionsPerWeek × 4 sessions for the cycle — 8 SCHEDULED rows for the authoritative worked example', async () => {
+  it('generates sessionsPerWeek Ã— 4 sessions for the cycle â€” 8 SCHEDULED rows for the authoritative worked example', async () => {
     (prisma.cohort.findUnique as any).mockResolvedValue({
       id: COHORT_ID,
       tutorId: TUTOR_ID,
@@ -109,7 +110,7 @@ describe('generateSessionsForCohort', () => {
     expect(createManyArg.data.every((row: any) => row.status === 'SCHEDULED')).toBe(true);
   });
 
-  it('does not double-generate on a re-run for the same cycle — guarded by checking for existing sessions first', async () => {
+  it('does not double-generate on a re-run for the same cycle â€” guarded by checking for existing sessions first', async () => {
     (prisma.cohort.findUnique as any).mockResolvedValue({
       id: COHORT_ID,
       tutorId: TUTOR_ID,
@@ -161,7 +162,7 @@ describe('generateSessionsForCohort', () => {
       sessionsPerWeek: 2,
       status: 'ACTIVE',
     });
-    // Tutor has since removed/added slots — availability now computes to a different count.
+    // Tutor has since removed/added slots â€” availability now computes to a different count.
     (prisma.availabilitySlot.findMany as any).mockResolvedValue([
       { id: 'slot-1', tutorId: TUTOR_ID, isRecurring: true },
     ]);
@@ -178,7 +179,7 @@ describe('generateSessionsForCohort', () => {
     expect(sessionsPerWeekChanged).toBe(false);
   });
 
-  it('[Phase 4 — Review §6.1] weekly recurring sessions keep the same local wall-clock time across a DST transition', async () => {
+  it('[Phase 4 â€” Review Â§6.1] weekly recurring sessions keep the same local wall-clock time across a DST transition', async () => {
     // America/New_York DST spring-forward in 2026 is 2026-03-08. A recurring
     // slot agreed as "4:00 PM Eastern" is stored as the UTC instant for that
     // local time on its anchor date. Each subsequent weekly occurrence must
@@ -232,7 +233,7 @@ describe('provideJitsiLink', () => {
     vi.useRealTimers();
   });
 
-  it('resolves providedLateNotice: false when submitted ≥30 minutes before start', async () => {
+  it('resolves providedLateNotice: false when submitted â‰¥30 minutes before start', async () => {
     (prisma.scheduledSession.findUnique as any).mockResolvedValue({
       id: SESSION_ID,
       tutorId: TUTOR_ID,
@@ -313,7 +314,7 @@ describe('provideJitsiLink', () => {
     });
   });
 
-  it('non-assigned tutor rejected (IDOR) — ApiError(403, "Not authorized to provide a link for this session")', async () => {
+  it('non-assigned tutor rejected (IDOR) â€” ApiError(403, "Not authorized to provide a link for this session")', async () => {
     (prisma.scheduledSession.findUnique as any).mockResolvedValue({
       id: SESSION_ID,
       tutorId: TUTOR_ID,
@@ -350,7 +351,7 @@ describe('assertSessionAccessAllowed', () => {
     expect(result.id).toBe(SESSION_ID);
   });
 
-  it('Student/Parent blocked on the guardian-hold — the same ApiError(403, ...) propagates unmodified, before the membership check', async () => {
+  it('Student/Parent blocked on the guardian-hold â€” the same ApiError(403, ...) propagates unmodified, before the membership check', async () => {
     const holdError = new ApiError(403, 'Account access is on hold pending guardian action');
     (assertAccountStatusAllowsAccess as any).mockRejectedValue(holdError);
     (prisma.scheduledSession.findUnique as any).mockResolvedValue({
@@ -383,7 +384,7 @@ describe('assertSessionAccessAllowed', () => {
     );
   });
 
-  it('a Tutor caller is never gated by the guardian-hold check — assertAccountStatusAllowsAccess is asserted not called', async () => {
+  it('a Tutor caller is never gated by the guardian-hold check â€” assertAccountStatusAllowsAccess is asserted not called', async () => {
     (assertAccountStatusAllowsAccess as any).mockImplementation(() => {
       throw new Error('should not be called for a TUTOR caller');
     });
@@ -488,7 +489,7 @@ describe('listMySessions / getSession (co-located reads)', () => {
     expect(result.sessions).toEqual([]);
   });
 
-  it('getSession — non-member rejected (IDOR) with ApiError(403, "Not authorized to view this session")', async () => {
+  it('getSession â€” non-member rejected (IDOR) with ApiError(403, "Not authorized to view this session")', async () => {
     (assertAccountStatusAllowsAccess as any).mockResolvedValue(undefined);
     (prisma.scheduledSession.findUnique as any).mockResolvedValue({
       id: SESSION_ID,
@@ -504,7 +505,7 @@ describe('listMySessions / getSession (co-located reads)', () => {
     });
   });
 
-  it('getSession reports PAYMENT_PAUSE_RESCHEDULED verbatim — this endpoint only reports it, never sets it', async () => {
+  it('getSession reports PAYMENT_PAUSE_RESCHEDULED verbatim â€” this endpoint only reports it, never sets it', async () => {
     (assertAccountStatusAllowsAccess as any).mockResolvedValue(undefined);
     (prisma.scheduledSession.findUnique as any).mockResolvedValue({
       id: SESSION_ID,
@@ -523,7 +524,7 @@ describe('listMySessions / getSession (co-located reads)', () => {
     expect(result.status).toBe('PAYMENT_PAUSE_RESCHEDULED');
   });
 
-  it("listMySessions is scoped strictly to the caller's own cohorts — the query filter never returns another caller's sessions", async () => {
+  it("listMySessions is scoped strictly to the caller's own cohorts â€” the query filter never returns another caller's sessions", async () => {
     (prisma.cohortMembership.findMany as any).mockResolvedValue([{ cohortId: COHORT_ID }]);
     (prisma.scheduledSession.findMany as any).mockResolvedValue([
       { id: SESSION_ID, cohortId: COHORT_ID },
@@ -534,5 +535,23 @@ describe('listMySessions / getSession (co-located reads)', () => {
 
     const findManyArg = (prisma.scheduledSession.findMany as any).mock.calls[0][0];
     expect(JSON.stringify(findManyArg)).toContain(COHORT_ID);
+  });
+});
+
+describe('listMySessions for tutors', () => {
+  beforeEach(resetMocks);
+
+  it('a tutor sees sessions of the cohorts they teach, looked up by tutorId', async () => {
+    (prisma.cohort.findMany as any).mockResolvedValue([{ id: COHORT_ID }]);
+    (prisma.scheduledSession.findMany as any).mockResolvedValue([
+      { id: SESSION_ID, cohortId: COHORT_ID },
+    ]);
+
+    const { listMySessions } = await import('../../src/services/session.service.js');
+    const result = await listMySessions('tutor-1', 'TUTOR');
+
+    expect((prisma.cohort.findMany as any).mock.calls[0][0].where).toEqual({ tutorId: 'tutor-1' });
+    expect(result.sessions).toHaveLength(1);
+    expect(prisma.cohortMembership.findMany).not.toHaveBeenCalled();
   });
 });

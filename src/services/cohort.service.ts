@@ -15,7 +15,7 @@ export async function createOneToOneCohort(
   // outer tx holds `FOR UPDATE` on the StudentProfile row, and the
   // nested CohortMembership insert on a separate connection blocks on
   // the FK `FOR KEY SHARE` check against that same row, which never
-  // releases until the outer tx commits — which never happens because
+  // releases until the outer tx commits â€” which never happens because
   // the outer tx is waiting for the inner call. Symptom: Prisma's 5s
   // interactive-transaction timeout on `selectTutor`.
   tx?: any,
@@ -38,7 +38,7 @@ export async function createOneToOneCohort(
   const cohort = await client.cohort.create({
     data: {
       format: 'ONE_TO_ONE',
-      // Per Doc 04 §4.2.3, a 1-to-1 cohort enters the admin-approval queue
+      // Per Doc 04 Â§4.2.3, a 1-to-1 cohort enters the admin-approval queue
       // on tutor selection. This DB write uses the real
       // `PENDING_ADMIN_APPROVAL` enum value.
       status: 'PENDING_ADMIN_APPROVAL',
@@ -104,7 +104,7 @@ export async function formOrJoinCohort(matchRequestId: string): Promise<any> {
         },
       });
 
-      // The response's `status` field is a *domain signal* to the caller —
+      // The response's `status` field is a *domain signal* to the caller â€”
       // it distinguishes "the cohort just reached its target size on this
       // call" (`FULL`) from "still gathering members" (`FORMING`). The DB
       // column carries the real enum value (`PENDING_ADMIN_APPROVAL`);
@@ -275,6 +275,27 @@ export async function getMyCohort(
   callerRole: string,
   overrides: any,
 ): Promise<any> {
+  if (callerRole === 'TUTOR') {
+    const tutorCohorts = await prisma.cohort.findMany({
+      where: { tutorId: callerId, status: { notIn: ['ENDED', 'CANCELLED'] } },
+      include: {
+        _count: { select: { memberships: { where: { status: { not: 'ENDED' } } } } },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+    return {
+      cohorts: tutorCohorts.map((cohort: any) => ({
+        cohortId: cohort.id,
+        cohortMembershipId: null,
+        format: cohort.format,
+        status: cohort.status,
+        targetGroupSize: cohort.targetGroupSize ?? null,
+        groupFormationWindowExpiresAt: cohort.groupFormationWindowExpiresAt ?? null,
+        memberCount: cohort._count?.memberships ?? 0,
+        membershipStatus: null,
+      })),
+    };
+  }
   const studentId = callerRole === 'STUDENT' ? callerId : overrides?.studentId || callerId;
   const memberships = await prisma.cohortMembership.findMany({
     where: { studentId, status: { not: 'ENDED' } },
@@ -328,7 +349,12 @@ export async function getCohortMembers(
       students: (cohort.memberships as any[]).map((m) => ({
         studentId: m.studentId,
         cohortMembershipId: m.id,
-        firstName: m.student?.firstName ?? String(m.student?.user?.name ?? '').split(' ')[0],
+        firstName:
+          String(m.student?.firstName ?? '').trim() ||
+          String(m.student?.user?.name ?? '')
+            .trim()
+            .split(' ')[0] ||
+          m.student?.user?.email,
         grade: m.student?.grade,
       })),
     };

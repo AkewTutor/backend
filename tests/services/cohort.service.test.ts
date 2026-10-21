@@ -1,13 +1,13 @@
-/**
+﻿/**
  * tests/services/cohort.service.test.ts
  *
- * Journey step 3.5. Spec: `09-3-matching-cohorts.md` §9.5.
- * Function-level ref: `8-3-matching-cohorts.md` — src/services/cohort.service.ts.
+ * Journey step 3.5. Spec: `09-3-matching-cohorts.md` Â§9.5.
+ * Function-level ref: `8-3-matching-cohorts.md` â€” src/services/cohort.service.ts.
  * FRs: FR-MA-006, FR-MA-009, FR-MA-011, FR-MA-016, Section 7 partial-formation,
  *      Section 8 tutor-exit + M3 group-splitting, FR-SP-030.
- * OWASP: A01:2021 – Broken Access Control (profile-visibility split enforcement).
+ * OWASP: A01:2021 â€“ Broken Access Control (profile-visibility split enforcement).
  *
- * Unit tier — mocked Prisma, mocked `adminMatching.service.ts` for the
+ * Unit tier â€” mocked Prisma, mocked `adminMatching.service.ts` for the
  * tutor-exit handoff call, mocked `notification.service.ts` for the
  * rejection-notice payload assertion.
  */
@@ -18,6 +18,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../../src/config/db.js', () => {
   const p = {
     cohort: {
+      findMany: vi.fn(),
       findUnique: vi.fn(),
       findFirst: vi.fn(),
       create: vi.fn(),
@@ -196,7 +197,7 @@ describe('formOrJoinCohort', () => {
       targetGroupSize: 3,
     });
     (prisma.cohortMembership.count as any).mockResolvedValue(2); // read shows 1 seat remaining
-    // The conditional write reports zero rows affected — someone else took the last seat.
+    // The conditional write reports zero rows affected â€” someone else took the last seat.
     (prisma.cohortMembership.updateMany as any).mockResolvedValue({ count: 0 });
 
     (prisma.cohortMembership.create as any).mockClear();
@@ -219,7 +220,7 @@ describe('formOrJoinCohort', () => {
     await formOrJoinCohort(matchRequestId);
 
     // The size-check-and-claim write must be a guarded conditional (updateMany with a
-    // capacity condition in its WHERE), not a bare unconditional Cohort.update — a bare
+    // capacity condition in its WHERE), not a bare unconditional Cohort.update â€” a bare
     // findUnique-then-update pattern is exactly the read-then-write gap this guards against.
     expect(prisma.cohortMembership.updateMany).toHaveBeenCalled();
     const guardArgs = (prisma.cohortMembership.updateMany as any).mock.calls[0][0];
@@ -399,7 +400,7 @@ describe('tutorExitContinuity', () => {
     }
   });
 
-  it('single eligible replacement tutor keeps the group together — hands off one call with all new MatchRequest ids', async () => {
+  it('single eligible replacement tutor keeps the group together â€” hands off one call with all new MatchRequest ids', async () => {
     (prisma.cohort.findUnique as any).mockResolvedValue({
       id: cohortId,
       format: 'ONE_TO_FIVE',
@@ -422,7 +423,7 @@ describe('tutorExitContinuity', () => {
     expect(ids).toHaveLength(5);
   });
 
-  it('no single tutor can take the full group — leaves the rows flagged for manual assembly, does not attempt a split itself', async () => {
+  it('no single tutor can take the full group â€” leaves the rows flagged for manual assembly, does not attempt a split itself', async () => {
     (prisma.cohort.findUnique as any).mockResolvedValue({
       id: cohortId,
       format: 'ONE_TO_FIVE',
@@ -447,7 +448,7 @@ describe('tutorExitContinuity', () => {
 describe('endCohort', () => {
   beforeEach(() => resetAllMocks());
 
-  it('sets status, endedAt, and endedReason — the field archiveMessageThreads.job.ts keys off of', async () => {
+  it('sets status, endedAt, and endedReason â€” the field archiveMessageThreads.job.ts keys off of', async () => {
     (prisma.cohort.update as any).mockResolvedValue({
       id: cohortId,
       status: 'ENDED',
@@ -598,5 +599,32 @@ describe('getMyCohort / getCohortMembers', () => {
       firstName: 'Bethel',
       grade: 6,
     });
+  });
+});
+
+describe('getMyCohort for tutors', () => {
+  beforeEach(() => resetAllMocks());
+
+  it('a tutor gets the cohorts they teach (not ended/cancelled), looked up by tutorId', async () => {
+    (prisma.cohort.findMany as any).mockResolvedValue([
+      {
+        id: 'cohort-1',
+        format: 'ONE_TO_THREE',
+        status: 'ACTIVE',
+        targetGroupSize: 3,
+        groupFormationWindowExpiresAt: null,
+        _count: { memberships: 2 },
+      },
+    ]);
+
+    const result = await getMyCohort('tutor-1', 'TUTOR', undefined);
+
+    const where = (prisma.cohort.findMany as any).mock.calls[0][0].where;
+    expect(where.tutorId).toBe('tutor-1');
+    expect(where.status).toEqual({ notIn: ['ENDED', 'CANCELLED'] });
+    expect(result.cohorts).toEqual([
+      expect.objectContaining({ cohortId: 'cohort-1', status: 'ACTIVE', memberCount: 2 }),
+    ]);
+    expect(prisma.cohortMembership.findMany).not.toHaveBeenCalled();
   });
 });

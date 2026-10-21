@@ -66,7 +66,7 @@ describe('library.controller.ts', () => {
       'tutor-1',
       'cohort-1',
       'Chapter 3 Notes',
-      'PDF',
+      undefined,
       fileBuffer,
     );
     expect(res.status).toHaveBeenCalledWith(201);

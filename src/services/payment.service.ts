@@ -57,11 +57,17 @@ export async function initiatePayment(
     },
   });
 
-  const { checkoutUrl } = await initiateCheckout(
-    amount,
-    payment.id,
-    `${env.PUBLIC_API_URL}/payments/webhook/chapa`,
-  );
+  let checkoutUrl: string;
+  try {
+    ({ checkoutUrl } = await initiateCheckout(
+      amount,
+      payment.id,
+      `${env.PUBLIC_API_URL}/payments/webhook/chapa`,
+    ));
+  } catch {
+    // Provider rejected or was unreachable; the PENDING row stays so a retry can reuse it.
+    throw new ApiError(502, 'Payment provider is unavailable. Please try again later.');
+  }
 
   return {
     paymentId: payment.id,
@@ -101,6 +107,19 @@ export async function handleChapaWebhook(rawBody: Buffer, signatureHeader: strin
       where: { id: payment.id },
       data: { status: 'SUCCESS' },
     });
+
+    // First payment activates the membership and its cohort. Other statuses
+    // (e.g. a paused membership paying late) are deliberately left untouched.
+    if (payment.cohortMembership.status === 'PENDING_PAYMENT') {
+      await prisma.cohortMembership.update({
+        where: { id: payment.cohortMembership.id },
+        data: { status: 'ACTIVE' },
+      });
+      await prisma.cohort.updateMany({
+        where: { id: payment.cohortMembership.cohortId, status: 'PENDING_PAYMENT' },
+        data: { status: 'ACTIVE' },
+      });
+    }
 
     if (!payment.cohortMembership.billingCycleAnchorDate) {
       await prisma.cohortMembership.update({

@@ -5,6 +5,6 @@ export const rejectRefundSchema = z.object({
     refundId: z.string().uuid(),
   }),
   body: z.object({
-    rejectionReason: z.string().min(1),
+    rejectionReason: z.string().trim().min(1).max(500),
   }),
 });

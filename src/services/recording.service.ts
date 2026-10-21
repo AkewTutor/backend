@@ -1,7 +1,11 @@
-import { prisma } from '../config/db.js';
+﻿import { prisma } from '../config/db.js';
 import ApiError from '../utils/ApiError.js';
 import { getConsentStatus } from './recordingConsent.service.js';
-import { upload, getSignedUrl as storageGetSignedUrl } from '../utils/providers/storage.client.js';
+import {
+  upload,
+  getSignedUrl as storageGetSignedUrl,
+  objectExists,
+} from '../utils/providers/storage.client.js';
 
 export async function uploadRecording(tutorId: string, sessionId: string, buffer: Buffer) {
   const session = await prisma.scheduledSession.findUnique({
@@ -60,12 +64,21 @@ export async function getSignedUrl(callerId: string, recordingId: string) {
   const membership = await prisma.cohortMembership.findFirst({
     where: {
       cohortId: recording.session.cohortId,
-      OR: [{ studentId: callerId }, { cohort: { tutorId: callerId } }],
+      studentId: callerId,
     },
   });
 
   if (!membership) {
     throw new ApiError(403, 'Not authorized to access this recording');
+  }
+
+  const present = await objectExists(recording.storageKey);
+  if (present === false) {
+    await prisma.recording.update({
+      where: { id: recordingId },
+      data: { deletedAt: new Date() },
+    });
+    throw new ApiError(404, 'Recording no longer available');
   }
 
   const signedUrl = await storageGetSignedUrl(recording.storageKey, 900);
@@ -82,7 +95,7 @@ export async function keepPermanently(callerId: string, recordingId: string) {
   const membership = await prisma.cohortMembership.findFirst({
     where: {
       cohortId: recording.session.cohortId,
-      OR: [{ studentId: callerId }, { cohort: { tutorId: callerId } }],
+      studentId: callerId,
     },
   });
 
@@ -132,7 +145,7 @@ export async function escalateMissing(sessionId: string) {
 }
 
 export async function getMyRecordings(callerId: string, options: any) {
-  const recordings = await prisma.recording.findMany({
+  const rows = await prisma.recording.findMany({
     where: {
       OR: [{ keepPermanently: true }, { expiresAt: { gte: new Date() } }],
       deletedAt: null,
@@ -142,6 +155,44 @@ export async function getMyRecordings(callerId: string, options: any) {
         },
       },
     },
+    include: { session: { select: { cohortId: true, scheduledStart: true } } },
+    orderBy: { createdAt: 'desc' },
   });
+
+  const cohortIds = [
+    ...new Set(rows.map((r) => r.session?.cohortId).filter((id): id is string => !!id)),
+  ];
+  const cohortSessions =
+    cohortIds.length > 0
+      ? await prisma.scheduledSession.findMany({
+          where: { cohortId: { in: cohortIds } },
+          select: { id: true, cohortId: true },
+          orderBy: { scheduledStart: 'asc' },
+        })
+      : [];
+  const counters = new Map<string, number>();
+  const sessionNumbers = new Map<string, number>();
+  for (const s of cohortSessions) {
+    const next = (counters.get(s.cohortId) ?? 0) + 1;
+    counters.set(s.cohortId, next);
+    sessionNumbers.set(s.id, next);
+  }
+
+  const checks = await Promise.all(rows.map((r) => objectExists(r.storageKey)));
+  const missing = rows.filter((_, i) => checks[i] === false);
+  if (missing.length > 0) {
+    await prisma.recording.updateMany({
+      where: { id: { in: missing.map((m) => m.id) } },
+      data: { deletedAt: new Date() },
+    });
+  }
+  const liveRows = rows.filter((_, i) => checks[i] !== false);
+
+  const recordings = liveRows.map(({ session, ...rec }) => ({
+    ...rec,
+    cohortId: session?.cohortId ?? null,
+    sessionStart: session?.scheduledStart ?? null,
+    sessionNumber: sessionNumbers.get(rec.sessionId) ?? null,
+  }));
   return { recordings, page: 1, limit: 20, total: recordings.length };
 }

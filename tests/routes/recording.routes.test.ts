@@ -1,8 +1,8 @@
-/**
+﻿/**
  * tests/routes/recording.routes.test.ts
  *
- * Journey step 4.12. Spec: `09-4-class-delivery-library.md` §9.10.
- * OWASP: A01:2021 – Broken Access Control.
+ * Journey step 4.12. Spec: `09-4-class-delivery-library.md` Â§9.10.
+ * OWASP: A01:2021 â€“ Broken Access Control.
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -58,7 +58,7 @@ describe('recording.routes.ts', () => {
     });
   });
 
-  it('all 4 routes require auth — 401 with no Authorization header', async () => {
+  it('all 4 routes require auth â€” 401 with no Authorization header', async () => {
     const upload = await request(app).post('/api/v1/recordings').send({ sessionId: 'session-1' });
     const myRecordings = await request(app).get('/api/v1/recordings/me');
     const signedUrl = await request(app).get('/api/v1/recordings/recording-1/signed-url');
@@ -70,7 +70,7 @@ describe('recording.routes.ts', () => {
     expect(keep.status).toBe(401);
   });
 
-  it('getMyRecordings excludes expired-and-not-kept rows — reflected via the (mocked) service response', async () => {
+  it('getMyRecordings excludes expired-and-not-kept rows â€” reflected via the (mocked) service response', async () => {
     const res = await request(app)
       .get('/api/v1/recordings/me')
       .set('Authorization', 'Bearer student-token');
@@ -97,5 +97,13 @@ describe('recording.routes.ts', () => {
       .get('/api/v1/recordings/recording-1/signed-url')
       .set('Authorization', 'Bearer student-token');
     expect(notFound.status).toBe(404);
+  });
+  it('keep-permanently is Student|Parent only - a tutor gets 403 and the service is never called', async () => {
+    const res = await request(app)
+      .post('/api/v1/recordings/recording-1/keep-permanently')
+      .set('Authorization', 'Bearer tutor-token');
+
+    expect(res.status).toBe(403);
+    expect(recordingService.keepPermanently).not.toHaveBeenCalled();
   });
 });

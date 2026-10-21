@@ -8,7 +8,7 @@ import { resolveCallerProfileId, resolveGamificationCallerId } from '../utils/pr
 export const upload = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const tutorId = await resolveCallerProfileId((req as any).user);
-    const { cohortId, title, fileType } = req.body;
+    const { cohortId, title } = req.body;
     const file = req.file;
     if (!file) {
       throw new ApiError(HTTP_STATUS.BAD_REQUEST, 'File is required');
@@ -18,7 +18,7 @@ export const upload = async (req: Request, res: Response, next: NextFunction) =>
       tutorId,
       cohortId,
       title,
-      fileType,
+      undefined,
       file.buffer,
     );
     res
@@ -68,6 +68,26 @@ export const adminRecordingCompliance = async (req: Request, res: Response, next
         total: sessions.length,
       }),
     );
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const remove = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const tutorId = await resolveCallerProfileId((req as any).user);
+    const result = await libraryService.removeMaterial(tutorId, req.params.id as string);
+    res.status(HTTP_STATUS.OK).json(new SuccessResponse(HTTP_STATUS.OK, 'OK', result));
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const adminActivity = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const q = typeof req.query.q === 'string' ? req.query.q : undefined;
+    const items = await libraryService.adminLibraryActivity(q);
+    res.status(HTTP_STATUS.OK).json(new SuccessResponse(HTTP_STATUS.OK, 'OK', { items }));
   } catch (error) {
     next(error);
   }

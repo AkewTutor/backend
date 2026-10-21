@@ -41,3 +41,23 @@ describe('rejectRefundSchema', () => {
     expect(result.success).toBe(true);
   });
 });
+
+describe('rejectRefundSchema length limit', () => {
+  it('rejects a rejectionReason longer than 500 characters', async () => {
+    const result = await rejectRefundSchema.safeParseAsync({
+      params: { refundId: VALID_UUID },
+      body: { rejectionReason: 'x'.repeat(501) },
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it('accepts a rejectionReason of exactly 500 characters', async () => {
+    const result = await rejectRefundSchema.safeParseAsync({
+      params: { refundId: VALID_UUID },
+      body: { rejectionReason: 'x'.repeat(500) },
+    });
+
+    expect(result.success).toBe(true);
+  });
+});

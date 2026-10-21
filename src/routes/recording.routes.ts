@@ -1,5 +1,5 @@
-import { Router } from 'express';
-import authMiddleware from '../middlewares/auth.middleware.js';
+﻿import { Router } from 'express';
+import authMiddleware, { requireRole } from '../middlewares/auth.middleware.js';
 import multer from 'multer';
 import {
   upload as uploadController,
@@ -16,6 +16,6 @@ router.use(authMiddleware);
 router.post('/', uploadMiddleware.single('file'), uploadController);
 router.get('/me', getMyRecordings);
 router.get('/:recordingId/signed-url', getSignedUrl);
-router.post('/:recordingId/keep-permanently', keepPermanently);
+router.post('/:recordingId/keep-permanently', requireRole('STUDENT', 'PARENT'), keepPermanently);
 
 export default router;
