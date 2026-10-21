@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { SuccessResponse } from '../utils/ApiResponse.js';
 import { HTTP_STATUS } from '../constants/index.js';
 import * as quizService from '../services/assessmentQuiz.service.js';
-import { resolveCallerProfileId } from '../utils/profileIds.js';
+import { resolveCallerProfileId, resolveGamificationCallerId } from '../utils/profileIds.js';
 
 export const createQuiz = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -72,6 +72,21 @@ export const submitAttempt = async (req: Request, res: Response, next: NextFunct
     res
       .status(HTTP_STATUS.CREATED)
       .json(new SuccessResponse(HTTP_STATUS.CREATED, 'Created', result));
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getHistory = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const user = (req as any).user;
+    const callerId = await resolveGamificationCallerId(user);
+    const query = req.query as { q?: string; studentId?: string };
+    const history = await quizService.getAssessmentHistory(callerId, user.role, {
+      q: query.q || undefined,
+      studentId: query.studentId || undefined,
+    });
+    res.status(HTTP_STATUS.OK).json(new SuccessResponse(HTTP_STATUS.OK, 'OK', { history }));
   } catch (error) {
     next(error);
   }
