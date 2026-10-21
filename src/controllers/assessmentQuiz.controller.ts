@@ -1,0 +1,48 @@
+import { Request, Response, NextFunction } from 'express';
+import { SuccessResponse } from '../utils/ApiResponse.js';
+import { HTTP_STATUS } from '../constants/index.js';
+import * as quizService from '../services/assessmentQuiz.service.js';
+import { resolveCallerProfileId } from '../utils/profileIds.js';
+
+export const createQuiz = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const callerId = await resolveCallerProfileId((req as any).user);
+    const result = await quizService.createQuiz(callerId, req.body);
+    res
+      .status(HTTP_STATUS.CREATED)
+      .json(new SuccessResponse(HTTP_STATUS.CREATED, 'Created', result));
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const listForCohort = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const user = (req as any).user;
+    const callerId = await resolveCallerProfileId(user);
+    const quizzes = await quizService.getQuizzesForCohort(
+      callerId,
+      user.role,
+      req.params.cohortId as string,
+    );
+    res.status(HTTP_STATUS.OK).json(new SuccessResponse(HTTP_STATUS.OK, 'OK', { quizzes }));
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const submitAttempt = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const callerId = await resolveCallerProfileId((req as any).user);
+    const result = await quizService.submitAttempt(
+      callerId,
+      req.params.quizId as string,
+      req.body.answers,
+    );
+    res
+      .status(HTTP_STATUS.CREATED)
+      .json(new SuccessResponse(HTTP_STATUS.CREATED, 'Created', result));
+  } catch (error) {
+    next(error);
+  }
+};
