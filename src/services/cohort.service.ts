@@ -1,4 +1,4 @@
-﻿// src/services/cohort.service.ts
+// src/services/cohort.service.ts
 import { prisma } from '../config/db.js';
 import ApiError from '../utils/ApiError.js';
 import * as adminMatchingService from './adminMatching.service.js';
@@ -349,7 +349,12 @@ export async function getCohortMembers(
       students: (cohort.memberships as any[]).map((m) => ({
         studentId: m.studentId,
         cohortMembershipId: m.id,
-        firstName: m.student?.firstName ?? String(m.student?.user?.name ?? '').split(' ')[0],
+        firstName:
+          String(m.student?.firstName ?? '').trim() ||
+          String(m.student?.user?.name ?? '')
+            .trim()
+            .split(' ')[0] ||
+          m.student?.user?.email,
         grade: m.student?.grade,
       })),
     };
