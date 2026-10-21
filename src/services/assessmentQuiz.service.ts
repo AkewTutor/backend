@@ -29,6 +29,16 @@ function studentName(student: any): string {
   return student?.firstName ?? String(student?.user?.name ?? '').split(' ')[0];
 }
 
+async function findOwnedQuiz(tutorId: string, quizId: string) {
+  const quiz = await prisma.assessmentQuiz.findFirst({
+    where: { id: quizId, deletedAt: null },
+    include: { cohort: true },
+  });
+  if (!quiz) throw new ApiError(404, 'Quiz not found');
+  if (quiz.cohort.tutorId !== tutorId) throw new ApiError(403, 'Not authorized');
+  return quiz;
+}
+
 export async function createQuiz(
   tutorId: string,
   data: {
@@ -43,26 +53,68 @@ export async function createQuiz(
   if (!cohort || cohort.tutorId !== tutorId) throw new ApiError(403, 'Not authorized');
 
   const weekStart = parseWeek(data.weekStartDate);
-  const existing = await prisma.assessmentQuiz.findUnique({
-    where: { cohortId_weekStartDate: { cohortId: data.cohortId, weekStartDate: weekStart } },
+  const existing = await prisma.assessmentQuiz.findFirst({
+    where: { cohortId: data.cohortId, weekStartDate: weekStart, deletedAt: null },
   });
   if (existing) throw new ApiError(409, DUPLICATE_MSG);
 
-  try {
-    return await prisma.assessmentQuiz.create({
-      data: {
-        cohortId: data.cohortId,
-        weekStartDate: weekStart,
-        title: data.title,
-        instructions: data.instructions,
-        questions: data.questions as any,
-        createdByTutorId: tutorId,
-      },
-    });
-  } catch (e) {
-    if ((e as { code?: string }).code === 'P2002') throw new ApiError(409, DUPLICATE_MSG);
-    throw e;
+  return prisma.assessmentQuiz.create({
+    data: {
+      cohortId: data.cohortId,
+      weekStartDate: weekStart,
+      title: data.title || null,
+      instructions: data.instructions,
+      questions: data.questions as any,
+      createdByTutorId: tutorId,
+    },
+  });
+}
+
+export async function updateQuiz(
+  tutorId: string,
+  quizId: string,
+  data: { title?: string; instructions?: string; questions?: QuizQuestion[] },
+) {
+  await findOwnedQuiz(tutorId, quizId);
+
+  if (data.questions) {
+    // Any attempt (even a reset one) is history that refers to these questions.
+    const attempts = await prisma.assessmentAttempt.count({ where: { quizId } });
+    if (attempts > 0) throw new ApiError(409, 'Questions are locked once students have submitted');
   }
+
+  return prisma.assessmentQuiz.update({
+    where: { id: quizId },
+    data: {
+      ...(data.title !== undefined ? { title: data.title || null } : {}),
+      ...(data.instructions !== undefined ? { instructions: data.instructions } : {}),
+      ...(data.questions ? { questions: data.questions as any } : {}),
+    },
+  });
+}
+
+// Soft delete: hidden from tutor and students, kept for admin/parent history.
+export async function deleteQuiz(tutorId: string, quizId: string) {
+  await findOwnedQuiz(tutorId, quizId);
+  await prisma.assessmentQuiz.update({ where: { id: quizId }, data: { deletedAt: new Date() } });
+  return { id: quizId };
+}
+
+// Lets the student retry. The old attempt stays as history (supersededAt set).
+export async function resetAttempt(tutorId: string, attemptId: string) {
+  const attempt = await prisma.assessmentAttempt.findUnique({
+    where: { id: attemptId },
+    include: { quiz: { include: { cohort: true } } },
+  });
+  if (!attempt || attempt.quiz.deletedAt) throw new ApiError(404, 'Attempt not found');
+  if (attempt.quiz.cohort.tutorId !== tutorId) throw new ApiError(403, 'Not authorized');
+  if (attempt.supersededAt) throw new ApiError(409, 'This attempt was already reset');
+
+  await prisma.assessmentAttempt.update({
+    where: { id: attemptId },
+    data: { supersededAt: new Date() },
+  });
+  return { id: attemptId };
 }
 
 export async function getQuizzesForCohort(callerId: string, role: string, cohortId: string) {
@@ -72,10 +124,11 @@ export async function getQuizzesForCohort(callerId: string, role: string, cohort
   if (role === 'TUTOR') {
     if (cohort.tutorId !== callerId) throw new ApiError(403, 'Not authorized');
     const quizzes = await prisma.assessmentQuiz.findMany({
-      where: { cohortId },
+      where: { cohortId, deletedAt: null },
       orderBy: { weekStartDate: 'desc' },
       include: {
         attempts: {
+          orderBy: { submittedAt: 'asc' },
           include: { cohortMembership: { include: { student: { include: { user: true } } } } },
         },
       },
@@ -93,6 +146,7 @@ export async function getQuizzesForCohort(callerId: string, role: string, cohort
         score: a.score,
         total: a.total,
         submittedAt: a.submittedAt,
+        supersededAt: a.supersededAt,
       })),
     }));
   }
@@ -103,28 +157,38 @@ export async function getQuizzesForCohort(callerId: string, role: string, cohort
     });
     if (!membership) throw new ApiError(403, 'Not authorized');
     const quizzes = await prisma.assessmentQuiz.findMany({
-      where: { cohortId },
+      where: { cohortId, deletedAt: null },
       orderBy: { weekStartDate: 'desc' },
-      include: { attempts: { where: { cohortMembershipId: membership.id } } },
+      include: {
+        attempts: { where: { cohortMembershipId: membership.id }, orderBy: { submittedAt: 'asc' } },
+      },
     });
     return quizzes.map((q) => {
-      const attempt = q.attempts[0] ?? null;
+      const active = q.attempts.find((a) => a.supersededAt === null) ?? null;
       const questions = q.questions as unknown as QuizQuestion[];
       return {
         id: q.id,
         weekStartDate: q.weekStartDate,
         title: q.title,
         instructions: q.instructions,
-        // Correct answers are revealed only after the student has submitted.
-        questions: attempt ? questions : hideAnswers(questions),
-        myAttempt: attempt
+        // Correct answers are revealed only while the student has an active submission.
+        questions: active ? questions : hideAnswers(questions),
+        myAttempt: active
           ? {
-              answers: attempt.answers,
-              score: attempt.score,
-              total: attempt.total,
-              submittedAt: attempt.submittedAt,
+              answers: active.answers,
+              score: active.score,
+              total: active.total,
+              submittedAt: active.submittedAt,
             }
           : null,
+        previousAttempts: q.attempts
+          .filter((a) => a.supersededAt !== null)
+          .map((a) => ({
+            score: a.score,
+            total: a.total,
+            submittedAt: a.submittedAt,
+            supersededAt: a.supersededAt,
+          })),
       };
     });
   }
@@ -133,7 +197,7 @@ export async function getQuizzesForCohort(callerId: string, role: string, cohort
 }
 
 export async function submitAttempt(studentId: string, quizId: string, answers: number[][]) {
-  const quiz = await prisma.assessmentQuiz.findUnique({ where: { id: quizId } });
+  const quiz = await prisma.assessmentQuiz.findFirst({ where: { id: quizId, deletedAt: null } });
   if (!quiz) throw new ApiError(404, 'Quiz not found');
 
   const membership = await prisma.cohortMembership.findFirst({
@@ -141,8 +205,8 @@ export async function submitAttempt(studentId: string, quizId: string, answers: 
   });
   if (!membership) throw new ApiError(403, 'Not authorized');
 
-  const already = await prisma.assessmentAttempt.findUnique({
-    where: { quizId_cohortMembershipId: { quizId, cohortMembershipId: membership.id } },
+  const already = await prisma.assessmentAttempt.findFirst({
+    where: { quizId, cohortMembershipId: membership.id, supersededAt: null },
   });
   if (already) throw new ApiError(409, 'You have already submitted this assessment');
 
@@ -161,28 +225,21 @@ export async function submitAttempt(studentId: string, quizId: string, answers: 
     if (correct.length === picked.size && correct.every((idx) => picked.has(idx))) score += 1;
   });
 
-  try {
-    const attempt = await prisma.assessmentAttempt.create({
-      data: {
-        quizId,
-        cohortMembershipId: membership.id,
-        answers: answers as any,
-        score,
-        total: questions.length,
-      },
-    });
-    return {
-      id: attempt.id,
-      score: attempt.score,
-      total: attempt.total,
-      submittedAt: attempt.submittedAt,
-      answers,
-      questions,
-    };
-  } catch (e) {
-    if ((e as { code?: string }).code === 'P2002') {
-      throw new ApiError(409, 'You have already submitted this assessment');
-    }
-    throw e;
-  }
+  const attempt = await prisma.assessmentAttempt.create({
+    data: {
+      quizId,
+      cohortMembershipId: membership.id,
+      answers: answers as any,
+      score,
+      total: questions.length,
+    },
+  });
+  return {
+    id: attempt.id,
+    score: attempt.score,
+    total: attempt.total,
+    submittedAt: attempt.submittedAt,
+    answers,
+    questions,
+  };
 }
