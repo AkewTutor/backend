@@ -52,3 +52,10 @@ export const submitAttemptSchema = z.object({
     answers: z.array(z.array(z.number().int().min(0).max(5)).max(6)),
   }),
 });
+
+export const historyQuerySchema = z.object({
+  query: z.object({
+    q: z.string().trim().max(100).optional(),
+    studentId: z.string().uuid().optional(),
+  }),
+});
