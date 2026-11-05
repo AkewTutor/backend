@@ -20,9 +20,7 @@ AkewTutor is an online tutoring platform for Ethiopian learners. This repository
 
 ## Video demonstration
 
-> **Video link pending** — replace `VIDEO_URL_HERE` with the final **5-minute demonstration with voice-over** before submission.
-
-[▶ Watch the project demonstration](VIDEO_URL_HERE)
+[▶ Watch the project demonstration](https://drive.google.com/file/d/1NmXntF1y_rfFZGA31UptuXilovjBzdal/view?usp=sharing)
 ## API responsibilities
 
 | Domain | Responsibilities |
