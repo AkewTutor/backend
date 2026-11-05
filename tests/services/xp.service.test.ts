@@ -202,20 +202,26 @@ describe('getLeaderboard', () => {
   });
 
   it('WEEKLY vs MONTHLY use genuinely different aggregation windows', async () => {
-    (prisma.xPLedgerEntry.groupBy as any).mockResolvedValue([
-      { studentId: STUDENT_ID, _sum: { amount: 100 } },
-    ]);
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-18T12:00:00Z'));
+    try {
+      (prisma.xPLedgerEntry.groupBy as any).mockResolvedValue([
+        { studentId: STUDENT_ID, _sum: { amount: 100 } },
+      ]);
 
-    await getLeaderboard(STUDENT_ID, 'STUDENT' as any, undefined, 'WEEKLY' as any);
-    const weeklyArg = (prisma.xPLedgerEntry.groupBy as any).mock.calls[0][0];
+      await getLeaderboard(STUDENT_ID, 'STUDENT' as any, undefined, 'WEEKLY' as any);
+      const weeklyArg = (prisma.xPLedgerEntry.groupBy as any).mock.calls[0][0];
 
-    (prisma.xPLedgerEntry.groupBy as any).mockClear();
-    await getLeaderboard(STUDENT_ID, 'STUDENT' as any, undefined, 'MONTHLY' as any);
-    const monthlyArg = (prisma.xPLedgerEntry.groupBy as any).mock.calls[0][0];
+      (prisma.xPLedgerEntry.groupBy as any).mockClear();
+      await getLeaderboard(STUDENT_ID, 'STUDENT' as any, undefined, 'MONTHLY' as any);
+      const monthlyArg = (prisma.xPLedgerEntry.groupBy as any).mock.calls[0][0];
 
-    expect(JSON.stringify(weeklyArg.where.createdAt)).not.toBe(
-      JSON.stringify(monthlyArg.where.createdAt),
-    );
+      expect(JSON.stringify(weeklyArg.where.createdAt)).not.toBe(
+        JSON.stringify(monthlyArg.where.createdAt),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('parent caller resolves studentId via an ACTIVE relationship', async () => {
